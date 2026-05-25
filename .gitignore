@@ -1,0 +1,7 @@
+﻿node_modules/
+travel-recommender/frontend/node_modules/
+travel-recommender/backend/node_modules/
+travel-recommender/backend/data/
+.vscode/
+.claude/
+.kiro/
