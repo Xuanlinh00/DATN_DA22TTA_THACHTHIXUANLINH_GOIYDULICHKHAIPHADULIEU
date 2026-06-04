@@ -26,10 +26,40 @@ class ChatRequest(BaseModel):
     message: str
     conversation_history: Optional[List[Dict]] = []
 
+class RatingRequest(BaseModel):
+    user_id: str
+    rating: float  # 1.0 – 5.0
+
 # Health check
 @router.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "Travel Recommender API"}
+
+# Global stats (used on HomePage counter widgets)
+@router.get("/stats")
+async def get_stats():
+    """Returns global system statistics for homepage display"""
+    try:
+        from mining.mongodb_storage import db_storage
+        df = engine.destinations
+        total_destinations = len(df) if not df.empty else 0
+        total_countries = int(df['Country'].nunique()) if not df.empty else 0
+
+        # Count rules in MongoDB
+        total_rules = 0
+        if db_storage.is_connected():
+            total_rules = db_storage.db.rules.count_documents({})
+
+        return {
+            "success": True,
+            "data": {
+                "total_destinations": total_destinations,
+                "total_countries":    total_countries,
+                "total_rules":        total_rules,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Data summary
 @router.get("/data/summary")
@@ -63,12 +93,16 @@ async def get_recommendations(request: RecommendationRequest):
         
         filters = {k: v for k, v in filters.items() if v is not None}
         results = engine.get_recommendations(filters, limit=request.limit)
-        
+
+        # Get matched Apriori rules for frontend explanation panel
+        matched_rules_info = engine.get_matched_rules_info(filters)
+
         return {
             "success": True,
             "count": len(results),
             "filters": filters,
-            "recommendations": results
+            "recommendations": results,
+            "matched_rules": matched_rules_info,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -137,7 +171,12 @@ async def get_all_destinations(
     try:
         df = engine.destinations
         total = len(df)
-        results = df.iloc[offset:offset+limit].to_dict('records')
+        
+        # Clean NaN values
+        import pandas as pd
+        subset = df.iloc[offset:offset+limit].copy()
+        subset = subset.astype(object).where(pd.notnull(subset), None)
+        results = subset.to_dict('records')
         
         return {
             "success": True,
@@ -146,6 +185,191 @@ async def get_all_destinations(
             "offset": offset,
             "count": len(results),
             "destinations": results
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Get weather for a destination
+@router.get("/destinations/{destination_name}/weather")
+async def get_destination_weather(destination_name: str):
+    """Get current weather for a specific destination"""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from weather_service import get_current_weather
+
+        # Try to get country and coordinates from destination data
+        df = engine.destinations
+        country = ""
+        lat = None
+        lon = None
+        if not df.empty:
+            match = df[df['Destination Name'] == destination_name]
+            if not match.empty:
+                dest_row = match.iloc[0]
+                country = str(dest_row.get('Country', ''))
+                # Ưu tiên lấy tọa độ của nước để thời tiết và khí hậu chính xác với thực tế quốc gia đó
+                lat = dest_row.get('country_latitude')
+                lon = dest_row.get('country_longitude')
+                
+                import pandas as pd
+                if pd.isna(lat) or pd.isna(lon):
+                    lat = dest_row.get('destination_latitude')
+                    lon = dest_row.get('destination_longitude')
+
+        # Convert coordinates to float if present
+        try:
+            import pandas as pd
+            latitude = float(lat) if lat is not None and not pd.isna(lat) else None
+            longitude = float(lon) if lon is not None and not pd.isna(lon) else None
+        except ValueError:
+            latitude = None
+            longitude = None
+
+        # Use first word of destination name as city query fallback
+        city = destination_name.split()[0] if destination_name else destination_name
+        weather = get_current_weather(city_name=city, country_name=country, latitude=latitude, longitude=longitude)
+        return {
+            "success": True,
+            "destination": destination_name,
+            "country": country,
+            "weather": weather
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Get historical climate data for a destination (Open-Meteo Archive API)
+@router.get("/destinations/{destination_name}/climate")
+async def get_destination_climate(destination_name: str):
+    """
+    Lấy dữ liệu khí hậu lịch sử (nhiệt độ TB và lượng mưa từng tháng)
+    cho một điểm đến, sử dụng Open-Meteo Archive API miễn phí.
+    Dùng để vẽ biểu đồ khí hậu (Climate Chart) trên trang chi tiết điểm đến.
+    """
+    try:
+        from services.openmeteo_service import get_historical_climate, get_best_months_to_visit
+
+        # Lấy tọa độ (lat/lon) của điểm đến từ dữ liệu
+        df = engine.destinations
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Không có dữ liệu điểm đến.")
+
+        match = df[df['Destination Name'] == destination_name]
+        if match.empty:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy điểm đến: {destination_name}")
+
+        dest_row = match.iloc[0]
+        # Lấy tọa độ của nước (hoặc điểm đến) từ dữ liệu để đảm bảo tính thực tế
+        lat = dest_row.get('country_latitude')
+        lon = dest_row.get('country_longitude')
+        
+        import pandas as pd
+        if pd.isna(lat) or pd.isna(lon):
+            lat = dest_row.get('destination_latitude')
+            lon = dest_row.get('destination_longitude')
+
+        if pd.isna(lat) or pd.isna(lon):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Điểm đến '{destination_name}' không có dữ liệu tọa độ (lat/lon)."
+            )
+
+        # Gọi Open-Meteo Archive API
+        climate_result = get_historical_climate(
+            latitude=float(lat),
+            longitude=float(lon)
+        )
+
+        if not climate_result["success"]:
+            raise HTTPException(
+                status_code=502,
+                detail=climate_result.get("error", "Lỗi không xác định từ Open-Meteo API.")
+            )
+
+        # Tính các tháng đẹp nhất để du lịch
+        best_months = get_best_months_to_visit(
+            climate_result["climate"]["temp_avg"],
+            climate_result["climate"]["rainfall"]
+        )
+
+        return {
+            "success":     True,
+            "destination": destination_name,
+            "latitude":    float(lat),
+            "longitude":   float(lon),
+            "climate":     climate_result["climate"],
+            "year":        climate_result["year"],
+            "best_months": best_months,
+            "source":      climate_result["source"]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Rate a destination (saves real user rating to MongoDB for Collaborative Filtering)
+@router.post("/destinations/{destination_name}/rate")
+async def rate_destination(destination_name: str, request: RatingRequest):
+    """
+    Saves a star rating (1–5) for a destination from an anonymous user.
+    The rating is stored in MongoDB and immediately used to refresh the
+    Collaborative Filtering item-similarity matrix.
+    """
+    try:
+        if not (1.0 <= request.rating <= 5.0):
+            raise HTTPException(status_code=422, detail="Rating phải nằm trong khoảng 1.0 đến 5.0")
+
+        from mining.collaborative_filtering import collaborative_recommender
+        success = collaborative_recommender.save_real_rating(
+            user_id=request.user_id,
+            destination_name=destination_name,
+            rating=request.rating
+        )
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Không thể lưu đánh giá. Vui lòng thử lại.")
+
+        return {
+            "success":          True,
+            "destination":      destination_name,
+            "user_id":          request.user_id,
+            "rating":           request.rating,
+            "message":          f"Đã lưu đánh giá {request.rating}⭐ cho {destination_name}!"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Get a user's own rating for a destination
+@router.get("/destinations/{destination_name}/my-rating")
+async def get_my_rating(destination_name: str, user_id: str = Query(...)):
+    """
+    Retrieves the authenticated (anonymous) user's rating for a destination.
+    Used by the frontend to show the user's existing star selection.
+    """
+    try:
+        from mining.collaborative_filtering import collaborative_recommender
+        rating = collaborative_recommender.get_user_rating(
+            user_id=user_id,
+            destination_name=destination_name
+        )
+        return {
+            "success":     True,
+            "destination": destination_name,
+            "user_id":     user_id,
+            "rating":      rating,  # None if not rated yet
+            "has_rated":   rating is not None,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -161,57 +385,39 @@ async def get_destination_details(destination_name: str):
         if dest.empty:
             raise HTTPException(status_code=404, detail="Destination not found")
         
+        import pandas as pd
+        dest_clean = dest.astype(object).where(pd.notnull(dest), None)
+        
         return {
             "success": True,
-            "destination": dest.iloc[0].to_dict()
+            "destination": dest_clean.iloc[0].to_dict()
         }
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 # Chat endpoint
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    """Simple chat endpoint"""
+    """Chat endpoint powered by Gemini NLP Chatbot Module"""
     try:
-        message = request.message.lower()
-        filters = {}
+        from nlp.gemini_module import process_chat_query
         
-        # Detect season
-        seasons = ['spring', 'summer', 'autumn', 'fall', 'winter']
-        for season in seasons:
-            if season in message:
-                filters['season'] = season.capitalize()
-                break
-        
-        # Detect budget
-        if any(word in message for word in ['cheap', 'budget', 'affordable']):
-            filters['budget'] = 'Budget'
-        elif any(word in message for word in ['luxury', 'expensive', 'premium']):
-            filters['budget'] = 'Luxury'
-        
-        # Detect category
-        categories = ['beach', 'mountain', 'cultural', 'nature', 'adventure', 'historical']
-        for cat in categories:
-            if cat in message:
-                filters['category'] = cat.capitalize()
-                break
-        
-        results = engine.get_recommendations(filters, limit=6)
-        
-        response_text = f"Toi tim thay {len(results)} diem den phu hop"
-        if filters:
-            filter_desc = ", ".join([f"{k}: {v}" for k, v in filters.items()])
-            response_text += f" ({filter_desc})"
+        # Run NLP pipeline to parse intent, extract entities and generate response
+        res = process_chat_query(request.message)
         
         return {
             "success": True,
-            "response": response_text,
-            "filters": filters,
-            "recommendations": results
+            "response": res["response"],
+            "filters": res["preferences"],
+            "recommendations": res["recommendations"]
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 # Get filter options
@@ -232,3 +438,172 @@ async def get_filter_options():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# ADMIN DASHBOARD ENDPOINTS
+# ==========================================
+
+class AprioriParams(BaseModel):
+    min_support: Optional[float] = 0.01
+    min_confidence: Optional[float] = 0.1
+    min_lift: Optional[float] = 1.0
+
+class ClusteringParams(BaseModel):
+    n_clusters: Optional[int] = 5
+
+@router.get("/admin/stats")
+async def get_admin_stats():
+    """Retrieves dashboard stats for admin panel"""
+    try:
+        from mining.mongodb_storage import db_storage
+        df = engine.destinations
+        total_destinations = len(df) if not df.empty else 0
+        total_countries = int(df['Country'].nunique()) if not df.empty else 0
+        
+        total_rules = 0
+        total_ratings = 0
+        real_ratings = 0
+        simulated_ratings = 0
+        cluster_profiles = []
+        
+        if db_storage.is_connected():
+            total_rules = db_storage.db.rules.count_documents({})
+            total_ratings = db_storage.db.user_ratings.count_documents({})
+            real_ratings = db_storage.db.user_ratings.count_documents({"is_real": True})
+            simulated_ratings = total_ratings - real_ratings
+            cluster_profiles = list(db_storage.db.cluster_profiles.find({}, {"_id": 0}))
+            
+        return {
+            "success": True,
+            "stats": {
+                "total_destinations": total_destinations,
+                "total_countries": total_countries,
+                "total_rules": total_rules,
+                "total_ratings": total_ratings,
+                "real_ratings": real_ratings,
+                "simulated_ratings": simulated_ratings
+            },
+            "cluster_profiles": cluster_profiles
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/ratings")
+async def get_admin_ratings(limit: int = 150):
+    """Retrieves all user ratings from database"""
+    try:
+        from mining.mongodb_storage import db_storage
+        ratings = []
+        if db_storage.is_connected():
+            # Return real ratings first, then simulated, sorted descending by rating
+            ratings = list(db_storage.db.user_ratings.find({}, {"_id": 0}).limit(limit))
+            # Sort by rating or real ratings
+            ratings.sort(key=lambda x: (x.get('is_real', False), x.get('rating', 0.0)), reverse=True)
+        return {
+            "success": True,
+            "ratings": ratings
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/rules")
+async def get_admin_rules():
+    """Retrieves all rules from database"""
+    try:
+        from mining.mongodb_storage import db_storage
+        rules = []
+        if db_storage.is_connected():
+            rules = list(db_storage.db.rules.find({}, {"_id": 0}))
+        return {
+            "success": True,
+            "rules": rules
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/admin/ratings")
+async def delete_admin_rating(user_id: str, destination_name: str):
+    """Deletes a rating and updates collaborative filtering matrix"""
+    try:
+        from mining.mongodb_storage import db_storage
+        from mining.collaborative_filtering import collaborative_recommender
+        if db_storage.is_connected():
+            res = db_storage.db.user_ratings.delete_one({
+                "user_id": user_id,
+                "destination_name": destination_name
+            })
+            if res.deleted_count > 0:
+                # Refresh CF matrix immediately
+                collaborative_recommender.refresh_similarity_matrix()
+                return {"success": True, "message": f"Đã xóa đánh giá của user {user_id} cho điểm đến {destination_name}."}
+            else:
+                raise HTTPException(status_code=404, detail="Không tìm thấy đánh giá cần xóa.")
+        raise HTTPException(status_code=500, detail="Không kết nối được MongoDB.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/mine-apriori")
+async def run_apriori_mining(params: AprioriParams):
+    """Triggers Apriori rule mining from MongoDB transactions"""
+    try:
+        from mining.apriori_module import mine_association_rules
+        rules = mine_association_rules(
+            min_support=params.min_support,
+            min_confidence=params.min_confidence,
+            min_lift=params.min_lift
+        )
+        # Reload engine data to sync rules and updated info
+        engine.load_data()
+        return {
+            "success": True,
+            "count": len(rules),
+            "message": f"Khai phá thành công! Tạo mới {len(rules)} luật kết hợp Apriori."
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/run-clustering")
+async def run_kmeans_clustering(params: ClusteringParams):
+    """Triggers K-Means clustering and updates cluster profiles"""
+    try:
+        from mining.clustering import run_clustering
+        profiles = run_clustering(n_clusters=params.n_clusters)
+        if profiles is None:
+            raise HTTPException(status_code=500, detail="Lỗi trong quá trình phân cụm.")
+        # Reload engine data to sync updated cluster labels
+        engine.load_data()
+        return {
+            "success": True,
+            "profiles": profiles,
+            "message": f"Phân cụm K-Means thành công với k={params.n_clusters} cụm!"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/refresh-cf")
+async def refresh_cf_matrix():
+    """Triggers manual re-computation of Collaborative Filtering item similarities"""
+    try:
+        from mining.collaborative_filtering import collaborative_recommender
+        collaborative_recommender.refresh_similarity_matrix()
+        # Reload engine data to sync destinations and rating updates
+        engine.load_data()
+        return {
+            "success": True,
+            "message": "Đã tính toán lại ma trận tương đồng Collaborative Filtering thành công!"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

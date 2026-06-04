@@ -2,24 +2,44 @@
 """
 Main FastAPI application for Travel Recommender System
 """
+import sys
+# Fix Windows console encoding issues for Vietnamese characters
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import json
 import uvicorn
 from api.routes import router
+
+class UTF8JSONResponse(JSONResponse):
+    """Custom JSON response that ensures UTF-8 encoding for Vietnamese characters."""
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+        ).encode("utf-8")
 
 app = FastAPI(
     title="Travel Recommender API",
     description="He thong goi y du lich quoc te",
-    version="1.0.0"
+    version="1.0.0",
+    default_response_class=UTF8JSONResponse,
 )
 
-# CORS configuration
+# CORS configuration - Allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include API routes
@@ -41,4 +61,4 @@ if __name__ == "__main__":
     print("[START] Starting Travel Recommender Backend...")
     print("[INFO] API: http://localhost:8000")
     print("[INFO] Docs: http://localhost:8000/docs")
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
