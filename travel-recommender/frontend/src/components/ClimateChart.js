@@ -8,10 +8,33 @@ const MONTH_FULL_VI = [
   'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12',
 ];
 
+const MONTH_SHORT_VI = [
+  'Th.1', 'Th.2', 'Th.3', 'Th.4',
+  'Th.5', 'Th.6', 'Th.7', 'Th.8',
+  'Th.9', 'Th.10', 'Th.11', 'Th.12',
+];
+
+const MONTH_MAP_VI = {
+  'Jan': 'Tháng 1',
+  'Feb': 'Tháng 2',
+  'Mar': 'Tháng 3',
+  'Apr': 'Tháng 4',
+  'May': 'Tháng 5',
+  'Jun': 'Tháng 6',
+  'Jul': 'Tháng 7',
+  'Aug': 'Tháng 8',
+  'Sep': 'Tháng 9',
+  'Oct': 'Tháng 10',
+  'Nov': 'Tháng 11',
+  'Dec': 'Tháng 12'
+};
+
+const translateMonth = (m) => MONTH_MAP_VI[m] || m;
+
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 /** A single bar column for one month */
-function MonthBar({ month, monthFull, tempBar, rainBar, tempVal, rainVal, isBest, onMouseEnter, onMouseLeave }) {
+function MonthBar({ month, monthFull, monthShort, tempBar, rainBar, tempVal, rainVal, isBest, onMouseEnter, onMouseLeave }) {
   return (
     <div
       className={`climate-month-col ${isBest ? 'best-month' : ''}`}
@@ -36,7 +59,7 @@ function MonthBar({ month, monthFull, tempBar, rainBar, tempVal, rainVal, isBest
           />
         )}
       </div>
-      <span className="climate-month-label">{month}</span>
+      <span className="climate-month-label">{monthShort}</span>
     </div>
   );
 }
@@ -200,6 +223,7 @@ function ClimateChart({ climateData, bestMonths = [], year, loading, error }) {
               key={month}
               month={month}
               monthFull={MONTH_FULL_VI[idx]}
+              monthShort={MONTH_SHORT_VI[idx]}
               tempBar={showTemp ? normTemp(temp_avg[idx]) : null}
               rainBar={showRain ? normRain(rainfall[idx])  : null}
               tempVal={temp_avg[idx]}
@@ -261,7 +285,7 @@ function ClimateChart({ climateData, bestMonths = [], year, loading, error }) {
         <div className="climate-best-months">
           <span className="climate-best-label">✈️ Nên đi vào:</span>
           {bestMonths.map(m => (
-            <span key={m} className="climate-best-pill">{m}</span>
+            <span key={m} className="climate-best-pill">{translateMonth(m)}</span>
           ))}
         </div>
       )}

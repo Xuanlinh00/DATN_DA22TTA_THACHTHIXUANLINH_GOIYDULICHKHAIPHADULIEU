@@ -1,11 +1,6 @@
 /* Custom style rules to ensure beautiful layout and avoid overlaps or default browser button styling */
 
-/* Sidebar offset on large screens to prevent content overlapping the left fixed sidebar filter */
-@media (min-width: 1280px) {
-  .sidebar-offset {
-    padding-left: 360px !important;
-  }
-}
+
 
 .glass-hero-text {
   background: rgba(255, 255, 255, 0.45) !important;

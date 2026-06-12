@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { destinationsApi, getOrCreateUserId } from '../services/api';
-import { getDestinationImage } from '../services/imageService';
+import { getDestinationImage, getFallbackImage } from '../services/imageService';
 import DestinationCard from '../components/DestinationCard';
 import ClimateChart from '../components/ClimateChart';
+import { translateCountry, translateCategory, translateSeason, translateDestinationName } from '../utils/translator';
 import './DestinationDetailPage.css';
 
 function DestinationDetailPage() {
@@ -117,7 +118,22 @@ function DestinationDetailPage() {
     );
   }
 
-  const imageUrl = destination.image || getDestinationImage(destination['Destination Name'], destination.Type);
+  const isValidUrl = (url) => url && typeof url === 'string' && url.startsWith('http');
+  const imageUrl = isValidUrl(destination.image)
+    ? destination.image
+    : getDestinationImage(destination['Destination Name'], destination.Type, destination.Country);
+
+  const destName = destination['Destination Name'] ?? 'N/A';
+  const hasDesc = destination.Description && String(destination.Description).toLowerCase() !== 'nan' && destination.Description.trim() !== '';
+  const descriptionText = hasDesc
+    ? destination.Description
+    : `Khám phá ${destName} - điểm đến ${translateCategory(destination.Type).toLowerCase()} tuyệt vời tại ${translateCountry(destination.Country)}. Nơi đây nổi tiếng với phong cảnh đẹp, khí hậu lý tưởng vào ${translateSeason(destination['Best Season']).toLowerCase()} và nhiều trải nghiệm du lịch hấp dẫn đang chờ đón bạn.`;
+
+  const hasCoords = destination.destination_latitude != null && destination.destination_longitude != null &&
+                    !isNaN(destination.destination_latitude) && !isNaN(destination.destination_longitude);
+  const mapUrl = hasCoords
+    ? `https://maps.google.com/maps?q=${destination.destination_latitude},${destination.destination_longitude}&hl=vi&z=12&output=embed`
+    : `https://maps.google.com/maps?q=${encodeURIComponent(destination['Destination Name'] + ' ' + destination.Country)}&hl=vi&z=12&output=embed`;
 
 
   return (
@@ -139,22 +155,22 @@ function DestinationDetailPage() {
         <section className="w-full md:w-1/2 flex flex-col gap-6">
           <div className="w-full h-[512px] md:h-[calc(100vh-160px)] relative overflow-hidden rounded-3xl shadow-2xl shrink-0">
             <img 
-              alt={destination['Destination Name']} 
+              alt={destName} 
               className="w-full h-full object-cover" 
               src={imageUrl}
               onError={(e) => {
-                e.target.src = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1200';
+                e.target.src = getFallbackImage(destination['Destination Name'], destination.Type);
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-primary/50 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
             
             <div className="absolute bottom-10 left-10 text-white z-10 text-left">
               <h1 className="font-display-lg text-display-lg tracking-tight leading-none text-white">
-                {destination['Destination Name']}
+                {destName}
               </h1>
               <p className="font-label-caps text-label-caps uppercase tracking-widest mt-3 flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm">location_on</span>
-                {destination.Country} {destination.country_flag}
+                {translateCountry(destination.Country)} {destination.country_flag}
               </p>
             </div>
           </div>
@@ -177,20 +193,18 @@ function DestinationDetailPage() {
         <section className="w-full md:w-1/2 px-4 md:px-12 flex flex-col gap-8 pt-10 md:pt-0">
           
           {/* Description Glass Card */}
-          {destination.Description && (
-            <div className="glass-panel p-8 rounded-2xl shadow-[0_40px_80px_rgba(136,19,55,0.05)] transform md:-translate-x-12 relative z-20 text-left">
-              <h2 className="font-display-lg text-headline-md text-primary mb-4">
-                {destination['UNESCO Site'] === 'Yes'
-                  ? `Di Sản UNESCO · ${destination.Type || 'Điểm Đến'}`
-                  : destination.Type
-                    ? `Điểm Đến ${destination.Type}`
-                    : `Khám Phá ${destination['Destination Name']}`}
-              </h2>
-              <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed text-sm md:text-base">
-                {destination.Description}
-              </p>
-            </div>
-          )}
+          <div className="glass-panel p-8 rounded-2xl shadow-[0_40px_80px_rgba(136,19,55,0.05)] transform md:-translate-x-12 relative z-20 text-left">
+            <h2 className="font-display-lg text-headline-md text-primary mb-4">
+              {destination['UNESCO Site'] === 'Yes'
+                ? `Di Sản UNESCO · ${translateCategory(destination.Type) || 'Điểm Đến'}`
+                : destination.Type
+                  ? `Điểm Đến ${translateCategory(destination.Type)}`
+                  : `Khám Phá ${destName}`}
+            </h2>
+            <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed text-sm md:text-base">
+              {descriptionText}
+            </p>
+          </div>
 
           {/* Stats & Metadata (Weather & Country Info Cards) */}
           <div className="flex flex-col sm:flex-row gap-4">
@@ -202,7 +216,7 @@ function DestinationDetailPage() {
               <div>
                 <p className="font-label-caps text-[9px] text-secondary font-bold uppercase tracking-wider">Khí Hậu Bản Địa</p>
                 <h3 className="text-sm font-bold text-on-surface mt-0.5">
-                  {weather ? `${weather.temp}°C | ${weather.description}` : `${destination['Best Season']}`}
+                  {weather ? `${weather.temp}°C | ${weather.description}` : `${translateSeason(destination['Best Season'])}`}
                 </h3>
               </div>
             </div>
@@ -225,7 +239,7 @@ function DestinationDetailPage() {
           <div className="glass-panel p-6 rounded-2xl grid grid-cols-2 gap-4 text-left">
             <div>
               <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Loại hình</p>
-              <p className="text-sm font-semibold text-primary mt-1">{destination.Type}</p>
+              <p className="text-sm font-semibold text-primary mt-1">{translateCategory(destination.Type)}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Chi phí tb</p>
@@ -239,13 +253,12 @@ function DestinationDetailPage() {
             )}
           </div>
 
-          {/* ── Map Widget (thay vào chỗ Climate Chart cũ) ─────────────────────────── */}
           <div className="glass-panel p-6 rounded-2xl shadow-sm text-left flex flex-col">
             <p className="font-label-caps text-[9px] text-secondary font-bold uppercase tracking-wider mb-1">
               Bản Đồ
             </p>
             <h3 className="text-sm font-bold text-on-surface mb-3">
-              Vị trí {destination['Destination Name']}
+              Vị trí {destName}
             </h3>
             <div className="w-full h-64 rounded-xl overflow-hidden shadow-inner">
               <iframe
@@ -255,7 +268,7 @@ function DestinationDetailPage() {
                 style={{ border: 0 }}
                 loading="lazy"
                 allowFullScreen
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(destination['Destination Name'] + ' ' + destination.Country)}&hl=vi&z=12&output=embed`}
+                src={mapUrl}
               ></iframe>
             </div>
           </div>
@@ -350,7 +363,7 @@ function DestinationDetailPage() {
           <span className="text-on-surface-variant hover:text-primary transition-opacity font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/')}>Hỗ trợ</span>
           <span className="text-primary underline font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/destinations')}>Điểm đến</span>
         </div>
-        <p className="text-secondary font-body-md text-body-md mt-6 opacity-60">© 2026 Trợ lý du lịch. Thiết kế dành cho những người thích dịch chuyển.</p>
+        <p className="text-secondary font-body-md text-body-md mt-6 opacity-60">GVHD: ThS. Phạm Thị Trúc Mai | Sinh viên thực hiện: Thạch Thị Xuân Linh_DA22TTA_110122013</p>
       </footer>
 
     </div>

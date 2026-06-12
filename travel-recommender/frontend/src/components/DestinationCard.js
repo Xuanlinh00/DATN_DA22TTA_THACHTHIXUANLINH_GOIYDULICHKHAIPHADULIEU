@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDestinationImage } from '../services/imageService';
+import { getDestinationImage, getFallbackImage } from '../services/imageService';
+import { translateCountry, translateCategory, translateSeason, translateDestinationName } from '../utils/translator';
 import './DestinationCard.css';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -34,11 +35,14 @@ function DestinationCard({ destination, rank, selected = false, onMapPin }) {
   const navigate = useNavigate();
   const [imgError, setImgError] = useState(false);
 
+  // Giữ country gốc (tiếng Anh) để tìm ảnh trên Unsplash chính xác hơn
+  const rawCountry = destination['Country'] ?? '';
+
   // ── Field extraction ─────────────────────────────────────────────────────
   const name = destination['Destination Name'] ?? 'N/A';
-  const country = destination['Country'] ?? 'N/A';
-  const type = destination['Type'] ?? '';
-  const season = destination['Best Season'] ?? '';
+  const country = translateCountry(destination['Country'] ?? 'N/A');
+  const type = translateCategory(destination['Type'] ?? '');
+  const season = translateSeason(destination['Best Season'] ?? '');
   const avgCost = destination['Avg Cost (USD/day)'];
   const avgRating = destination['Avg Rating'] ?? destination['Rating'];
   const rawDesc = destination['Description'] ?? '';
@@ -48,9 +52,11 @@ function DestinationCard({ destination, rank, selected = false, onMapPin }) {
     ? String(rawDesc)
     : '';
 
-  const imageUrl = !imgError && (destination.image || getDestinationImage(name, type))
-    ? destination.image || getDestinationImage(name, type)
-    : 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800';
+  const isValidUrl = (url) => url && typeof url === 'string' && url.startsWith('http');
+
+  const imageUrl = imgError 
+    ? getFallbackImage(name, destination['Type'] ?? '')
+    : (isValidUrl(destination.image) ? destination.image : getDestinationImage(name, destination['Type'] ?? '', rawCountry));
 
   const handleCardClick = () => {
     navigate(`/destinations/${encodeURIComponent(name)}`);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { filtersApi } from '../services/api';
+import { translateCountry } from '../utils/translator';
 import './FilterPanel.css';
 
 function FilterPanel({ onFilterChange }) {
@@ -171,7 +172,7 @@ function FilterPanel({ onFilterChange }) {
               >
                 <option value="">Tất cả</option>
                 {options.countries.map(country => (
-                  <option key={country} value={country}>{country}</option>
+                  <option key={country} value={country}>{translateCountry(country)}</option>
                 ))}
               </select>
             </div>

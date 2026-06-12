@@ -1,1 +1,15 @@
-/* ChatbotWidget styles are fully handled by Tailwind and index.css classes */
+/* Custom transitions for the chatbot history panel */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.history-panel-active {
+  animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

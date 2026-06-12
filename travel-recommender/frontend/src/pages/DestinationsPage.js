@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { recommendationsApi, destinationsApi } from '../services/api';
+import { translateSearchQuery } from '../utils/translator';
 import DestinationCard from '../components/DestinationCard';
 import FilterPanel from '../components/FilterPanel';
 import './DestinationsPage.css';
@@ -9,17 +10,35 @@ function DestinationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchLabel, setSearchLabel] = useState(''); // từ khóa đang hiển thị
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     loadDestinations();
   }, []);
+
+  // Debounced live search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!searchQuery.trim()) {
+      if (searchQuery === '') {
+        setSearchLabel('');
+        loadDestinations();
+      }
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      performSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+    // eslint-disable-next-line
+  }, [searchQuery]);
 
   const loadDestinations = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await destinationsApi.getAll({ limit: 50 });
-      
       if (response.data.success) {
         setDestinations(response.data.destinations);
       }
@@ -30,6 +49,45 @@ function DestinationsPage() {
       setLoading(false);
     }
   };
+
+  const performSearch = async (query) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Dịch từ khóa tiếng Việt → tiếng Anh (có thể ra nhiều terms)
+      const terms = translateSearchQuery(query); // ['biển'] → ['biển', 'beach']
+
+      // Gửi song song tất cả terms, lấy results không trùng
+      const allResults = await Promise.all(
+        terms.map(term => destinationsApi.search(term).catch(() => null))
+      );
+
+      // Merge & dedupe theo Destination Name, ưu tiên thứ tự term đầu tiên (relevance cao nhất)
+      const seen = new Set();
+      const merged = [];
+      for (const res of allResults) {
+        if (!res?.data?.success) continue;
+        for (const dest of res.data.results) {
+          const key = dest['Destination Name'];
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(dest);
+          }
+        }
+      }
+
+      setDestinations(merged);
+      setSearchLabel(query);
+    } catch (err) {
+      setError('Không thể tìm kiếm. Vui lòng thử lại sau.');
+      console.error('Error searching destinations:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   const handleFilterChange = async (newFilters) => {
     // Check if any filter is active
@@ -68,25 +126,17 @@ function DestinationsPage() {
       loadDestinations();
       return;
     }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await destinationsApi.search(searchQuery);
-      
-      if (response.data.success) {
-        setDestinations(response.data.results);
-      }
-    } catch (err) {
-      setError('Không thể tìm kiếm. Vui lòng thử lại sau.');
-      console.error('Error searching destinations:', err);
-    } finally {
-      setLoading(false);
-    }
+    await performSearch(searchQuery);
   };
 
+  const handleClear = () => {
+    setSearchQuery('');
+    loadDestinations();
+  };
+
+
   return (
-    <main className="pt-[180px] pb-20 px-container-padding max-w-7xl mx-auto md:pl-[12%] text-left" style={{ backgroundColor: '#fff7fa' }}>
+    <main className="pt-[180px] pb-20 px-container-padding max-w-7xl mx-auto text-left" style={{ backgroundColor: '#fff7fa' }}>
       
       {/* Hero Header */}
       <header className="mb-16">
@@ -102,16 +152,24 @@ function DestinationsPage() {
       {/* Controls: Search and Filter Toggle */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-10 w-full">
         <form onSubmit={handleSearch} className="relative w-full max-w-md">
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-secondary text-xl pointer-events-none">search</span>
           <input
             type="text"
-            placeholder="Tìm kiếm điểm đến thế giới..."
+            placeholder="Tìm kiếm điểm đến, quốc gia..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/60 border border-pink-200 focus:border-primary-container focus:ring-2 focus:ring-pink-300 rounded-full py-3.5 pl-6 pr-12 text-sm transition-all focus:outline-none text-on-surface font-body-md"
+            className="w-full bg-white/60 border border-pink-200 focus:border-primary-container focus:ring-2 focus:ring-pink-300 rounded-full py-3.5 pl-12 pr-12 text-sm transition-all focus:outline-none text-on-surface font-body-md"
           />
-          <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-primary flex items-center justify-center">
-            <span className="material-symbols-outlined text-xl">search</span>
-          </button>
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-primary flex items-center justify-center transition-colors"
+              title="Xóa tìm kiếm"
+            >
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+          ) : null}
         </form>
 
         <FilterPanel onFilterChange={handleFilterChange} />
@@ -135,8 +193,15 @@ function DestinationsPage() {
 
       {!loading && !error && (
         <>
-          <div className="mb-6 text-xs text-secondary font-semibold">
-            Tìm thấy <strong className="text-primary">{destinations.length}</strong> điểm đến phù hợp
+          <div className="mb-6 text-xs text-secondary font-semibold flex items-center gap-2">
+            {searchLabel ? (
+              <>
+                Kết quả tìm kiếm "<strong className="text-primary">{searchLabel}</strong>":&nbsp;
+                <strong className="text-primary">{destinations.length}</strong> điểm đến
+              </>
+            ) : (
+              <>Tìm thấy <strong className="text-primary">{destinations.length}</strong> điểm đến phù hợp</>
+            )}
           </div>
 
           <div className="masonry-grid">

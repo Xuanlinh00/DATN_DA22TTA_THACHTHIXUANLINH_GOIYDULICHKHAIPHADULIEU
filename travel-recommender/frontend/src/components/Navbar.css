@@ -124,16 +124,7 @@
   }
 }
 
-/* Shift Navbar to the right of the sidebar on screens >= 1280px to prevent overlaps */
-@media (min-width: 1280px) {
-  .navbar-custom {
-    left: calc(360px + 2%) !important;
-    right: 2% !important;
-    max-width: none !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
-}
+
 
 /* ── Theme-aware dark mode override for midnight theme ───── */
 html[data-theme="midnight"] .navbar-custom {

@@ -4,7 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { destinationsApi, recommendationsApi } from '../services/api';
-import { getDestinationImage } from '../services/imageService';
+import { getDestinationImage, getFallbackImage } from '../services/imageService';
+import { translateDestinationName, translateCountry, translateCategory, translateSeason } from '../utils/translator';
 
 // Fix default marker icon issue in React-Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -136,7 +137,7 @@ function WorldMapPage() {
   };
 
   const infoImage = selectedDest 
-    ? selectedDest.image || getDestinationImage(selectedDest['Destination Name'], selectedDest.Type)
+    ? selectedDest.image || getDestinationImage(selectedDest['Destination Name'], selectedDest.Type, selectedDest.Country)
     : 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&q=80&w=1000';
 
   return (
@@ -171,7 +172,7 @@ function WorldMapPage() {
                     {dest['Destination Name']}
                   </h3>
                   <p className="text-secondary text-[10px] font-semibold mb-2">
-                    📍 {dest.Country}
+                    📍 {translateCountry(dest.Country)}
                   </p>
                   <button
                     onClick={() => navigate(`/destinations/${encodeURIComponent(dest['Destination Name'])}`)}
@@ -277,21 +278,17 @@ function WorldMapPage() {
             
             <div className="flex flex-col justify-center flex-1">
               <span className="font-label-caps text-[10px] font-bold text-primary tracking-widest mb-1.5 uppercase">
-                {selectedDest.Type || 'ĐỀ XUẤT HÀNH TRÌNH'}
+                {translateCategory(selectedDest.Type) || 'ĐỀ XUẤT HÀNH TRÌNH'}
               </span>
               
               <h3 className="font-display-lg text-2xl font-bold text-primary mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-                {selectedDest['Destination Name']}, {selectedDest.Country}
+                {selectedDest['Destination Name']}, {translateCountry(selectedDest.Country)}
               </h3>
               
               <p className="font-body-lg text-xs md:text-sm text-on-surface-variant max-w-xl mb-4 leading-relaxed line-clamp-2">
-                {selectedDest.Description && selectedDest.Description !== 'nan'
+                {selectedDest.Description && String(selectedDest.Description).toLowerCase() !== 'nan' && selectedDest.Description.trim() !== ''
                   ? selectedDest.Description
-                  : [
-                      selectedDest.Type && `Loại hình: ${selectedDest.Type}.`,
-                      selectedDest['Best Season'] && `Thời điểm lý tưởng: ${selectedDest['Best Season']}.`,
-                      selectedDest['Avg Cost (USD/day)'] && `Chi phí trung bình: $${selectedDest['Avg Cost (USD/day)']}/ngày.`,
-                    ].filter(Boolean).join(' ') || 'Điểm đến hấp dẫn đang chờ bạn khám phá.'
+                  : `Khám phá ${selectedDest['Destination Name']} - điểm đến ${translateCategory(selectedDest.Type).toLowerCase()} tuyệt vời tại ${translateCountry(selectedDest.Country)}. Nơi đây nổi tiếng với phong cảnh đẹp, khí hậu lý tưởng vào ${translateSeason(selectedDest['Best Season']).toLowerCase()} và nhiều trải nghiệm du lịch hấp dẫn đang chờ đón bạn.`
                 }
               </p>
               

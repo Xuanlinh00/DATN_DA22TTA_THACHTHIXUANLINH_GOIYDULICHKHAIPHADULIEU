@@ -21,14 +21,280 @@ class RecommendationRequest(BaseModel):
     category: Optional[str] = None
     country: Optional[str] = None
     limit: Optional[int] = 10
+    user_id: Optional[str] = None
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = "default"
     conversation_history: Optional[List[Dict]] = []
+    recommendation_context: Optional[Dict] = None
+
+class ChatSessionSaveRequest(BaseModel):
+    session_id: str
+    user_id: str
+    title: str
+    messages: List[Dict]
 
 class RatingRequest(BaseModel):
     user_id: str
     rating: float  # 1.0 – 5.0
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    email: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    token: str
+    new_password: str
+
+class PreferencesRequest(BaseModel):
+    season: Optional[str] = None
+    category: Optional[str] = None
+    budget: Optional[str] = None
+
+import hashlib
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+# User Authentication Endpoints
+@router.post("/auth/register")
+async def register_user(request: RegisterRequest):
+    """Register a new user account"""
+    try:
+        from mining.mongodb_storage import db_storage
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+            
+        username = request.username.strip().lower()
+        email = request.email.strip().lower()
+        if not username or not request.password or not email:
+            raise HTTPException(status_code=400, detail="Vui lòng cung cấp đầy đủ tên đăng nhập, email và mật khẩu")
+            
+        # Check if user already exists
+        existing_user = db_storage.db.users.find_one({"username": username})
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Tên đăng nhập đã được sử dụng")
+            
+        # Check if email is already in use
+        existing_email = db_storage.db.users.find_one({"email": email})
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email này đã được sử dụng để đăng ký tài khoản")
+            
+        # Save new user
+        new_user = {
+            "username": username,
+            "email": email,
+            "password_hash": hash_password(request.password),
+            "full_name": request.full_name.strip() or username,
+            "role": "user"
+        }
+        db_storage.db.users.insert_one(new_user)
+        
+        return {
+            "success": True,
+            "message": "Đăng ký tài khoản thành công!"
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/auth/login")
+async def login_user(request: LoginRequest):
+    """Log in user and verify credentials"""
+    try:
+        from mining.mongodb_storage import db_storage
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+            
+        username = request.username.strip().lower()
+        # Find user
+        user = db_storage.db.users.find_one({"username": username})
+        if not user:
+            raise HTTPException(status_code=400, detail="Tên đăng nhập hoặc mật khẩu không chính xác")
+            
+        # Verify password
+        if user["password_hash"] != hash_password(request.password):
+            raise HTTPException(status_code=400, detail="Tên đăng nhập hoặc mật khẩu không chính xác")
+            
+        return {
+            "success": True,
+            "message": "Đăng nhập thành công!",
+            "user": {
+                "id": str(user["_id"]) if "_id" in user else username,
+                "username": user["username"],
+                "fullName": user.get("full_name", username),
+                "role": user.get("role", "user"),
+                "preferences": user.get("preferences")
+            }
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """Generate password reset token and send reset link to user's email"""
+    try:
+        from mining.mongodb_storage import db_storage
+        from services.email_service import send_reset_password_email
+        import secrets
+        from datetime import datetime, timedelta, timezone
+        import os
+        
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+            
+        email = request.email.strip().lower()
+        if not email:
+            raise HTTPException(status_code=400, detail="Vui lòng cung cấp email")
+            
+        user = db_storage.db.users.find_one({"email": email})
+        if not user:
+            # For security reasons, don't reveal that the email doesn't exist.
+            # But let's log it internally or output success message.
+            return {
+                "success": True,
+                "message": "Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu đã được gửi."
+            }
+            
+        # Generate token and expiry (15 mins)
+        token = secrets.token_hex(20)
+        expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
+        
+        # Save to user in db
+        db_storage.db.users.update_one(
+            {"email": email},
+            {"$set": {
+                "reset_token": token,
+                "reset_expiry": expiry
+            }}
+        )
+        
+        # Construct reset link
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        reset_link = f"{frontend_url}/reset-password?token={token}&email={email}"
+        
+        # Send reset email
+        send_reset_password_email(email, reset_link)
+        
+        return {
+            "success": True,
+            "message": "Liên kết đặt lại mật khẩu đã được gửi đến email của bạn."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Verify reset token and update password"""
+    try:
+        from mining.mongodb_storage import db_storage
+        from datetime import datetime, timezone
+        
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+            
+        email = request.email.strip().lower()
+        token = request.token.strip()
+        new_password = request.new_password
+        
+        if not email or not token or not new_password:
+            raise HTTPException(status_code=400, detail="Thiếu thông tin yêu cầu đặt lại mật khẩu")
+            
+        user = db_storage.db.users.find_one({
+            "email": email,
+            "reset_token": token
+        })
+        
+        if not user:
+            raise HTTPException(status_code=400, detail="Mã xác thực đặt lại mật khẩu không chính xác hoặc đã được sử dụng")
+            
+        # Check token expiry
+        expiry = user.get("reset_expiry")
+        if not expiry:
+            raise HTTPException(status_code=400, detail="Mã xác thực không hợp lệ")
+            
+        # Handle timezone-aware conversion
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+            
+        if datetime.now(timezone.utc) > expiry:
+            raise HTTPException(status_code=400, detail="Mã xác thực đã hết hạn")
+            
+        # Update user's password, and clean up token fields
+        hashed = hash_password(new_password)
+        db_storage.db.users.update_one(
+            {"email": email},
+            {
+                "$set": {"password_hash": hashed},
+                "$unset": {"reset_token": "", "reset_expiry": ""}
+            }
+        )
+        
+        return {
+            "success": True,
+            "message": "Đặt lại mật khẩu thành công! Bạn có thể dùng mật khẩu mới để đăng nhập."
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/auth/preferences")
+async def update_preferences(request: PreferencesRequest, username: str = Query(...)):
+    """Update user's personal travel preferences"""
+    try:
+        from mining.mongodb_storage import db_storage
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+            
+        username_clean = username.strip().lower()
+        
+        # Build preferences update object
+        prefs = {}
+        if request.season: prefs["season"] = request.season
+        if request.category: prefs["category"] = request.category
+        if request.budget: prefs["budget"] = request.budget
+        
+        # Update user in DB
+        res = db_storage.db.users.update_one(
+            {"username": username_clean},
+            {"$set": {"preferences": prefs}}
+        )
+        
+        # Get updated user info
+        user = db_storage.db.users.find_one({"username": username_clean})
+        if not user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+            
+        return {
+            "success": True,
+            "message": "Cập nhật sở thích cá nhân thành công!",
+            "user": {
+                "id": str(user["_id"]) if "_id" in user else username_clean,
+                "username": user["username"],
+                "fullName": user.get("full_name", username_clean),
+                "role": user.get("role", "user"),
+                "preferences": user.get("preferences")
+            }
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Health check
 @router.get("/health")
@@ -92,7 +358,7 @@ async def get_recommendations(request: RecommendationRequest):
         }
         
         filters = {k: v for k, v in filters.items() if v is not None}
-        results = engine.get_recommendations(filters, limit=request.limit)
+        results = engine.get_recommendations(filters, limit=request.limit, user_id=request.user_id)
 
         # Get matched Apriori rules for frontend explanation panel
         matched_rules_info = engine.get_matched_rules_info(filters)
@@ -147,7 +413,7 @@ async def get_similar_destinations(
 @router.get("/destinations/search")
 async def search_destinations(
     q: str = Query(..., min_length=1),
-    limit: int = Query(default=10, ge=1, le=50)
+    limit: int = Query(default=50, ge=1, le=200)
 ):
     """Search destinations by name"""
     try:
@@ -407,7 +673,12 @@ async def chat(request: ChatRequest):
         from nlp.gemini_module import process_chat_query
         
         # Run NLP pipeline to parse intent, extract entities and generate response
-        res = process_chat_query(request.message)
+        res = process_chat_query(
+            request.message,
+            session_id=request.session_id or "default",
+            recommendation_context=request.recommendation_context,
+            conversation_history=request.conversation_history
+        )
         
         return {
             "success": True,
@@ -418,6 +689,68 @@ async def chat(request: ChatRequest):
     except Exception as e:
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Chat Session Management Endpoints
+@router.get("/chat/sessions")
+async def get_chat_sessions(user_id: str = Query(...)):
+    """Retrieve all chat sessions for a user"""
+    try:
+        from mining.mongodb_storage import db_storage
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+        sessions = db_storage.load_chat_sessions(user_id)
+        return {"success": True, "sessions": sessions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/chat/sessions/{session_id}")
+async def get_chat_session(session_id: str):
+    """Retrieve details of a single chat session"""
+    try:
+        from mining.mongodb_storage import db_storage
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+        session = db_storage.load_chat_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        return {"success": True, "session": session}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/chat/sessions")
+async def save_chat_session(request: ChatSessionSaveRequest):
+    """Save or update a chat session"""
+    try:
+        from mining.mongodb_storage import db_storage
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+        success = db_storage.save_chat_session(
+            session_id=request.session_id,
+            user_id=request.user_id,
+            title=request.title,
+            messages=request.messages
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to save chat session")
+        return {"success": True, "message": "Chat session saved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/chat/sessions/{session_id}")
+async def delete_chat_session(session_id: str):
+    """Delete a chat session"""
+    try:
+        from mining.mongodb_storage import db_storage
+        if not db_storage.is_connected():
+            raise HTTPException(status_code=503, detail="Database connection not available")
+        success = db_storage.delete_chat_session(session_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete chat session")
+        return {"success": True, "message": "Chat session deleted successfully"}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Get filter options

@@ -530,21 +530,22 @@ def generate_response(
     prefs: dict,
     destinations: list,
     rules: list,
-    conversation_history: list | None = None
+    conversation_history: list | None = None,
+    recommendation_context_str: str = ""
 ) -> str:
     """Generate Vietnamese response via Gemini API; falls back to rule-based."""
     if model is None or not destinations:
         return generate_response_fallback(message, prefs, destinations, rules)
 
-    # Build context string for top-3 destinations
+    # Build context string for top-6 destinations
     dest_lines = []
-    for i, d in enumerate(destinations[:3], 1):
+    for i, d in enumerate(destinations[:6], 1):
         dest_lines.append(
             f"{i}. {d.get('Destination Name')} ({d.get('Country')}) – "
             f"Loại: {d.get('Type')}, Mùa tốt nhất: {d.get('Best Season')}, "
             f"Chi phí: ${d.get('Avg Cost (USD/day)')}/ngày, "
             f"Phù hợp: {d.get('Suitable For', 'N/A')}. "
-            f"Mô tả: {str(d.get('Description', 'N/A'))[:200]}"
+            f"Mô tả: {str(d.get('Description', 'N/A'))[:250]}"
         )
     dest_str  = "\n".join(dest_lines)
 
@@ -562,38 +563,50 @@ def generate_response(
     # Optional: include recent conversation history for context
     history_str = ""
     if conversation_history:
-        recent = conversation_history[-4:]  # last 2 turns
-        history_str = "\nLịch sử hội thoại gần đây:\n"
+        recent = conversation_history[-10:]  # last 5 turns
+        history_str = "\nLỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ:\n"
         for turn in recent:
-            role = "Người dùng" if turn["role"] == "user" else "Trợ lý"
-            history_str += f"  {role}: {turn['content'][:150]}\n"
+            role = "Người dùng" if turn["role"] == "user" else "Trợ lý AI"
+            history_str += f"  - {role}: {turn['content']}\n"
 
     prompt = f"""
 Bạn là trợ lý ảo tư vấn du lịch thông minh, sử dụng AI và khai phá dữ liệu.
+
 {history_str}
-Câu hỏi hiện tại: "{message}"
+{recommendation_context_str}
 
-Thông tin trích xuất từ câu hỏi:
-  - Nhu cầu tóm tắt: {pref_summary}
-  - Mùa: {prefs.get('season')}, Ngân sách: {prefs.get('budget')}
-  - Loại hình: {prefs.get('category')}, Quốc gia: {prefs.get('country')}
-  - Loại khách: {prefs.get('traveler_type')}, Số ngày: {prefs.get('duration_days')}
+CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG:
+"{message}"
 
-Quy luật Apriori khai phá được từ MongoDB:
+THÔNG TIN TRÍCH XUẤT VÀ DỮ LIỆU ĐỀ XUẤT:
+  - Nhu cầu hiện tại: {pref_summary}
+  - Sở thích/tiêu chí: Mùa {prefs.get('season')}, Ngân sách {prefs.get('budget')}, Loại hình {prefs.get('category')}, Quốc gia {prefs.get('country')}, Loại khách {prefs.get('traveler_type')}, Số ngày {prefs.get('duration_days')}
+  - Quy luật Apriori khai phá từ MongoDB:
 {rules_str}
-
-Top 3 điểm đến được đề xuất (sau khi lọc + TF-IDF ranking):
+  - Top các điểm đến đề xuất từ hệ thống:
 {dest_str}
 
-Hãy viết câu trả lời tư vấn bằng tiếng Việt tự nhiên, thân thiện và chuyên nghiệp, gồm:
-1. Chào người dùng, tóm tắt ngắn nhu cầu du lịch.
-2. Trình bày 3 điểm đến hàng đầu (tên, quốc gia, loại hình, mùa, chi phí, mô tả ngắn).
-3. Giải thích lý do đề xuất dựa trên quy luật Apriori (nếu có), tức là hành vi du lịch
-   thống kê được liên quan đến mùa, ngân sách, loại hình đã chọn.
-4. Nhắc nhở người dùng nhấp vào điểm đến trên giao diện để xem bản đồ Leaflet.js.
-5. Lời chúc ngắn gọn, thân thiện.
+---
+HƯỚNG DẪN TRẢ LỜI (HÃY ĐỌC KỸ VÀ TUÂN THỦ):
 
-Không sử dụng markdown lồng nhau phức tạp. Viết mạch lạc, dễ đọc, dùng emoji phù hợp.
+Xác định loại câu hỏi của người dùng để trả lời cho phù hợp:
+
+Trường hợp A: Người dùng đang yêu cầu một danh sách gợi ý điểm đến mới hoặc thay đổi tiêu chí tìm kiếm (ví dụ: "Gợi ý điểm du lịch hè", "Tìm giúp tôi điểm đi 5 ngày"):
+  - Trả lời thân thiện, tóm tắt ngắn nhu cầu du lịch của họ.
+  - Giới thiệu 3 điểm đến hàng đầu từ danh sách đề xuất ở trên (tên, quốc gia, loại hình, mùa, chi phí, mô tả ngắn).
+  - Giải thích lý do đề xuất dựa trên quy luật Apriori (nếu có).
+  - Nhắc nhở người dùng nhấp vào điểm đến trên bản đồ Leaflet.js để xem vị trí trực quan.
+  - Lời chúc ngắn gọn, thân thiện.
+
+Trường hợp B: Người dùng đang hỏi một câu hỏi tiếp nối (follow-up), muốn đi sâu chi tiết vào một điểm đến cụ thể, so sánh các điểm đến, hoặc hỏi về các khía cạnh liên quan (ẩm thực, đi lại, hoạt động, thời tiết, an toàn, khách sạn, v.v.):
+  - KHÔNG lặp lại danh sách gợi ý 3 điểm đến và KHÔNG lặp lại lời chào/nhắc nhở Leaflet.js một cách máy móc.
+  - Tập trung trả lời trực tiếp, sâu sắc và chi tiết vào đúng vấn đề người dùng đang hỏi bằng kiến thức của bạn.
+  - Sử dụng thông tin lịch sử hội thoại gần đây và các điểm đến được gợi ý để đưa ra câu trả lời chính xác, mang tính cá nhân hóa cao.
+  - Có thể đưa ra lời khuyên thiết thực, so sánh cụ thể hoặc gợi ý lịch trình chi tiết nếu phù hợp với câu hỏi.
+
+LƯU Ý CHUNG:
+- Trả lời bằng tiếng Việt tự nhiên, nhiệt tình, chuyên nghiệp.
+- Không sử dụng các định dạng markdown lồng nhau quá phức tạp. Viết mạch lạc, rõ ràng, sử dụng emoji thích hợp.
 """
     try:
         response = model.generate_content(prompt)
@@ -645,7 +658,9 @@ def _no_entity_response() -> str:
 # ─────────────────────────────────────────────
 def process_chat_query(
     user_message: str,
-    session_id: str = "default"
+    session_id: str = "default",
+    recommendation_context: dict = None,
+    conversation_history: list = None
 ) -> dict:
     """
     Full NLP pipeline:
@@ -669,6 +684,22 @@ def process_chat_query(
     if session_id not in _session_store:
         _session_store[session_id] = {"history": [], "last_prefs": {}}
     session = _session_store[session_id]
+
+    # Synchronize history from frontend if provided to support stateless/restarts
+    if conversation_history:
+        session["history"] = []
+        for turn in conversation_history:
+            role = "user" if turn.get("role") == "user" else "assistant"
+            content = turn.get("parts") or turn.get("content") or ""
+            if content:
+                session["history"].append({"role": role, "content": content})
+        
+        # If the last message in synchronized history is the current message, remove it
+        # so it doesn't get duplicated when we append it below.
+        if session["history"] and session["history"][-1]["role"] == "user" and session["history"][-1]["content"] == user_message:
+            session["history"].pop()
+
+    has_history = len(session["history"]) > 0
 
     # ── 1. Intent detection ───────────────────
     intent = detect_intent(user_message)
@@ -706,7 +737,48 @@ def process_chat_query(
     # Guard: if nothing extracted, ask for clarification
     useful_keys = ["season", "budget", "category", "country", "continent",
                    "duration_days", "traveler_type"]
-    if not any(prefs.get(k) for k in useful_keys):
+
+    # ── Merge recommendation context from frontend wizard ─────
+    rec_context_str = ""
+    if recommendation_context:
+        ctx_criteria = recommendation_context.get("criteria", {})
+        ctx_dests = recommendation_context.get("destinations", [])
+
+        # Merge wizard criteria into prefs if not already set by current message
+        for key in ["season", "category", "budget"]:
+            if ctx_criteria.get(key) and not prefs.get(key):
+                prefs[key] = ctx_criteria[key]
+                logger.info(f"[Pipeline] Merged recommendation context {key}={ctx_criteria[key]}")
+
+        # Save merged prefs
+        session["last_prefs"] = {k: v for k, v in prefs.items() if v and not k.startswith("_")}
+
+        # Build a descriptive context string for the LLM prompt
+        if ctx_criteria:
+            parts = []
+            if ctx_criteria.get("season"):
+                parts.append(f"Mùa: {SEASON_VI.get(ctx_criteria['season'], ctx_criteria['season'])}")
+            if ctx_criteria.get("category"):
+                parts.append(f"Loại hình: {CATEGORY_VI.get(ctx_criteria['category'], ctx_criteria['category'])}")
+            if ctx_criteria.get("budget"):
+                parts.append(f"Ngân sách: {BUDGET_VI.get(ctx_criteria['budget'], ctx_criteria['budget'])}")
+            rec_context_str += f"\nNgười dùng đang xem trang gợi ý với tiêu chí: {', '.join(parts)}.\n"
+
+        if ctx_dests:
+            dest_summaries = []
+            for d in ctx_dests[:6]:
+                dest_summaries.append(
+                    f"  - {d.get('name', 'N/A')} ({d.get('country', 'N/A')}) "
+                    f"– Loại: {d.get('type', 'N/A')}, Mùa tốt nhất: {d.get('season', 'N/A')}, "
+                    f"Chi phí: ${d.get('cost', 'N/A')}/ngày"
+                )
+            rec_context_str += "Các điểm đến đã được hệ thống gợi ý cho người dùng:\n"
+            rec_context_str += "\n".join(dest_summaries) + "\n"
+
+        logger.info(f"[Pipeline] Recommendation context injected: {len(ctx_dests)} destinations")
+
+    # Guard: if nothing extracted AND we don't have conversation history, ask for clarification
+    if not has_history and not any(prefs.get(k) for k in useful_keys):
         resp = _no_entity_response()
         session["history"].append({"role": "assistant", "content": resp})
         return {"response": resp, "preferences": prefs, "recommendations": [],
@@ -775,7 +847,8 @@ def process_chat_query(
     # ── 6. Response generation ────────────────
     response_text = generate_response(
         user_message, prefs, top_recommendations,
-        matched_rules, session["history"]
+        matched_rules, session["history"],
+        recommendation_context_str=rec_context_str
     )
     session["history"].append({"role": "assistant", "content": response_text})
 

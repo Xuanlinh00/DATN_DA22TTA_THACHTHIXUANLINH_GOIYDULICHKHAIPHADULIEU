@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import './Navbar.css';
 
 function Navbar() {
+  const { user, logout, isAuthenticated } = useAuth();
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -58,9 +60,30 @@ function Navbar() {
 
       {/* Action / Mobile Toggle button */}
       <div className="flex items-center gap-4">
-        <span className="material-symbols-outlined text-[#c24482] text-2xl cursor-pointer scale-105 active:scale-95 transition-transform">
-          account_circle
-        </span>
+        {isAuthenticated ? (
+          <div className="flex items-center gap-3">
+            <span className="hidden lg:inline-block text-xs font-semibold text-secondary">
+              Chào {user.fullName} ✨
+            </span>
+            <button 
+              onClick={logout}
+              className="text-[10px] uppercase font-bold tracking-wider text-primary border border-pink-200 bg-white/40 hover:bg-white px-3.5 py-2 rounded-full transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-xs">logout</span>
+              Thoát
+            </button>
+          </div>
+        ) : (
+          <Link 
+            to="/login"
+            className="text-[10px] uppercase font-bold tracking-wider text-white shadow-md px-4 py-2.5 rounded-full transition-all flex items-center gap-1"
+            style={{ background: 'var(--grad-primary, linear-gradient(135deg,#c24482,#f4a4c6))' }}
+          >
+            <span className="material-symbols-outlined text-xs">login</span>
+            Đăng Nhập
+          </Link>
+        )}
+        
         <button 
           className="mobile-only material-symbols-outlined text-[#c24482] text-2xl flex items-center justify-center p-1"
           onClick={() => setMenuOpen(!menuOpen)}

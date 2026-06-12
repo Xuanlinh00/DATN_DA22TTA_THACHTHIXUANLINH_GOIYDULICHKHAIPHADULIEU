@@ -1,57 +1,87 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recommendationsApi, dataApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import DestinationCard from '../components/DestinationCard';
+import { translateDestinationName, translateCountry, translateCategory } from '../utils/translator';
 import './HomePage.css';
 
 
 /* ── Season helpers ──────────────────────────────────────────── */
-const SEASON_LABELS = { Spring: 'Xuân', Summer: 'Hè', Autumn: 'Thu', Winter: 'Đông' };
+const SEASON_LABELS = { Spring: 'Xuân', Summer: 'Hạ', Autumn: 'Thu', Winter: 'Đông' };
 const SEASON_EMOJIS = { Spring: '🌸', Summer: '☀️', Autumn: '🍂', Winter: '❄️' };
 
 function detectSeason() {
   const m = new Date().getMonth() + 1;
-  if (m >= 3 && m <= 5) return 'Spring';
-  if (m >= 6 && m <= 8) return 'Summer';
-  if (m >= 9 && m <= 11) return 'Autumn';
-  return 'Winter';
+  if (m >= 1 && m <= 3) return 'Spring';
+  if (m >= 4 && m <= 6) return 'Summer';
+  if (m >= 7 && m <= 9) return 'Autumn';
+  return 'Winter'; // 10, 11, 12
 }
 
 function HomePage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentSeason] = useState(detectSeason);
   // Live stats from real data
   const [stats, setStats] = useState(null);
-  // Top destination for floating card (from real seasonal data)
+  // Top destination for floating card
   const [topDest, setTopDest] = useState(null);
+  // Whether showing personalized or seasonal recs
+  const [isPersonalized, setIsPersonalized] = useState(false);
 
-  /* Load seasonal recommendations + live stats */
+  /* Load recommendations + live stats */
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        const [seaRes, statsRes] = await Promise.allSettled([
-          recommendationsApi.getSeasonal(currentSeason, 6),
-          dataApi.getStats(),
-        ]);
-        if (seaRes.status === 'fulfilled' && seaRes.value.data.success) {
-          const recs = seaRes.value.data.recommendations;
-          setDestinations(recs);
-          if (recs.length > 0) setTopDest(recs[0]);
+        setIsPersonalized(false);
+
+        // Try personalized (CF) first if user is logged in
+        let recsLoaded = false;
+        if (isAuthenticated && user?.username) {
+          try {
+            const cfRes = await recommendationsApi.getFiltered({
+              user_id: user.username,
+              season: currentSeason,
+              limit: 6,
+            });
+            if (cfRes.data.success && cfRes.data.recommendations?.length > 0) {
+              const recs = cfRes.data.recommendations;
+              setDestinations(recs);
+              if (recs.length > 0) setTopDest(recs[0]);
+              setIsPersonalized(true);
+              recsLoaded = true;
+            }
+          } catch (_) {
+            // fall through to seasonal
+          }
         }
-        if (statsRes.status === 'fulfilled' && statsRes.value.data.success) {
-          setStats(statsRes.value.data.data);
+
+        // Fallback: seasonal recommendations
+        if (!recsLoaded) {
+          const seaRes = await recommendationsApi.getSeasonal(currentSeason, 6);
+          if (seaRes.data.success) {
+            const recs = seaRes.data.recommendations;
+            setDestinations(recs);
+            if (recs.length > 0) setTopDest(recs[0]);
+          }
         }
+
+        // Load stats in parallel
+        const statsRes = await dataApi.getStats();
+        if (statsRes.data.success) setStats(statsRes.data.data);
+
       } catch (err) {
         setError('Không thể tải gợi ý. Vui lòng thử lại.');
       } finally {
         setLoading(false);
       }
     })();
-  }, [currentSeason]);
+  }, [isAuthenticated, user, currentSeason]);
 
   /* Parallax effect for floating elements in hero */
   useEffect(() => {
@@ -75,7 +105,7 @@ function HomePage() {
 
 
       {/* ══════════════════ HERO SECTION (Split Screen with offset) ══════════════════ */}
-      <section className="relative min-h-screen pt-40 pb-20 px-container-padding flex flex-col md:flex-row items-center gap-asymmetric-gap-lg overflow-hidden sidebar-offset">
+      <section className="relative min-h-screen pt-40 pb-20 px-container-padding flex flex-col md:flex-row items-center gap-asymmetric-gap-lg overflow-hidden">
         {/* Background Decorative Orbs */}
         <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-primary/5 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute top-20 right-0 w-64 h-64 bg-secondary/10 rounded-full blur-[80px] pointer-events-none"></div>
@@ -104,7 +134,7 @@ function HomePage() {
 
         {/* Visual Content (Right Half - Teardrop Beach & Floating Cards) */}
         <div className="w-full md:w-1/2 relative">
-          <div className="relative w-full aspect-square max-w-[320px] sm:max-w-[420px] xl:max-w-[460px] 2xl:max-w-[540px] ml-auto">
+          <div className="relative w-full aspect-square max-w-[320px] sm:max-w-[420px] xl:max-w-[460px] 2xl:max-w-[540px] ml-auto md:mr-24">
             {/* Main Image - Teardrop/Blob Shape */}
             <div className="w-full h-full overflow-hidden blob-shape shadow-2xl relative border border-white/40">
               <img 
@@ -121,7 +151,7 @@ function HomePage() {
               </div>
               <p className="text-[10px] leading-tight text-on-surface-variant">
                 {topDest
-                  ? `Hàng đầu mùa ${SEASON_LABELS[currentSeason]}: ${topDest.Type || 'Điểm đến'}`
+                  ? `Hàng đầu mùa ${SEASON_LABELS[currentSeason]}: ${translateCategory(topDest.Type) || 'Điểm đến'}`
                   : 'Đang phân tích dữ liệu...'}
               </p>
             </div>
@@ -135,7 +165,7 @@ function HomePage() {
                   {topDest ? topDest['Destination Name'] : '...'}
                 </div>
                 <div className="text-[8px] text-on-surface-variant font-semibold">
-                  {topDest ? topDest['Country'] : ''}
+                  {topDest ? translateCountry(topDest['Country']) : ''}
                 </div>
               </div>
             </div>
@@ -151,19 +181,30 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ══════════════════ SEASONAL RECOMMENDATIONS ══════════════════ */}
-      <section className="py-20 px-6 md:px-12 max-w-6xl mx-auto sidebar-offset" style={{ background: 'transparent' }}>
+      {/* ══════════════════ RECOMMENDATIONS (Personalized or Seasonal) ══════════════════ */}
+      <section className="py-20 px-6 md:px-12 max-w-6xl mx-auto" style={{ background: 'transparent' }}>
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <span className="inline-block px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4"
-              style={{ background: 'color-mix(in srgb, var(--text-accent,#c24482) 10%, white)', color: 'var(--text-accent,#c24482)' }}>
-              ⭐ Gợi ý mang tính cá nhân
-            </span>
+            {isPersonalized ? (
+              <span className="inline-block px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4"
+                style={{ background: 'color-mix(in srgb, var(--text-accent,#c24482) 10%, white)', color: 'var(--text-accent,#c24482)' }}>
+                🤖 Gợi ý dành riêng cho bạn
+              </span>
+            ) : (
+              <span className="inline-block px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4"
+                style={{ background: 'color-mix(in srgb, var(--text-accent,#c24482) 10%, white)', color: 'var(--text-accent,#c24482)' }}>
+                ⭐ Gợi ý theo mùa
+              </span>
+            )}
             <h2 className="font-display-lg text-headline-lg text-primary">
-              {SEASON_EMOJIS[currentSeason]} Mùa {SEASON_LABELS[currentSeason]}
+              {isPersonalized
+                ? `👋 Xin chào, ${user?.fullName || user?.username}!`
+                : `${SEASON_EMOJIS[currentSeason]} Mùa ${SEASON_LABELS[currentSeason]}`}
             </h2>
             <p className="text-secondary mt-3 max-w-lg mx-auto text-sm">
-              Những thiên đường nghỉ dưỡng và điểm đến lý tưởng nhất cho thời điểm hiện tại
+              {isPersonalized
+                ? 'Dựa trên sở thích và lịch sử của bạn, chúng tôi đã tuyển chọn những điểm đến hoàn hảo nhất'
+                : 'Những thiên đường nghỉ dưỡng và điểm đến lý tưởng nhất cho thời điểm hiện tại'}
             </p>
           </div>
 
@@ -205,7 +246,7 @@ function HomePage() {
 
       {/* ══════════════════ LIVE STATS COUNTER ══════════════════ */}
       {stats && (
-        <section className="py-16 px-6 md:px-12 sidebar-offset"
+        <section className="py-16 px-6 md:px-12"
           style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--text-accent,#c24482) 5%, transparent), color-mix(in srgb, var(--text-accent,#c24482) 3%, transparent))' }}>
           <div className="max-w-4xl mx-auto grid grid-cols-3 gap-6 text-center">
             <div className="glass-panel py-8 px-4 rounded-2xl flex flex-col items-center gap-2">
@@ -233,65 +274,10 @@ function HomePage() {
         </section>
       )}
 
-      {/* ══════════════════ TẠI SAO CHỌN CHÚNG TÔI ══════════════════ */}
-      <section className="py-20 px-6 md:px-12 sidebar-offset">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="font-display-lg text-headline-lg text-primary mb-3">✨ Tại Sao Chọn Chúng Tôi?</h2>
-            <p className="text-secondary text-sm">Công nghệ AI kết hợp dữ liệu thực — giúp bạn khám phá đúng nơi mình muốn</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { icon: 'psychology', title: 'AI Thông Minh', desc: 'Thuật toán Hybrid kết hợp Content-Based + Apriori + Collaborative Filtering — gợi ý càng dùng càng chính xác.', badge: 'Kỹ thuật số' },
-              { icon: 'public',    title: 'Dữ Liệu Thực Tế',  desc: 'Hơn 1.000 điểm đến trên 50 quốc gia, dữ liệu luôn được cập nhật từ nhiều nguồn đáng tin cậy.', badge: 'Thực tế' },
-              { icon: 'tune',      title: 'Cá Nhân Hóa',    desc: 'Bộ lọc thông minh theo mùa, phong cách, ngân sách — kết quả là những nơi dành riêng cho bạn.', badge: 'Cá nhân' },
-            ].map((item, i) => (
-              <div key={i} className="glass-panel rounded-2xl p-8 text-center flex flex-col items-center gap-4 hover:-translate-y-1 transition-transform duration-300">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'color-mix(in srgb, var(--text-accent,#c24482) 10%, white)' }}>
-                  <span className="material-symbols-outlined text-2xl text-primary">{item.icon}</span>
-                </div>
-                <span className="text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full"
-                  style={{ background: 'color-mix(in srgb,var(--text-accent,#c24482) 10%,white)', color: 'var(--text-accent,#c24482)' }}>
-                  {item.badge}
-                </span>
-                <h3 className="font-bold text-base text-on-surface">{item.title}</h3>
-                <p className="text-sm text-on-surface-variant leading-relaxed opacity-80">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* ══════════════════ TRAVEL TIPS NGANG ══════════════════ */}
-      <section className="py-16 px-6 md:px-12 sidebar-offset"
-        style={{ background: 'color-mix(in srgb, var(--color-bg-2,#fbe4f2) 60%, white)' }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <h2 className="font-display-lg text-headline-md text-primary mb-2">💡 Kinh Nghiệm Du Lịch Thông Minh</h2>
-            <p className="text-secondary text-sm">Những mẹo hữfu ích dành cho người Việt khi du lịch nước ngoài</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { emoji: '📊', tip: 'So sánh giá vé máy bay', desc: 'Mua trước 6-8 tuần cho mùa hè, 3-4 tuần cho mùa thấp điểm. Thứ Ba, Thứ Tư thường có giá tốt nhất.' },
-              { emoji: '💳', tip: 'Quản lý ngân sách', desc: 'Dự trù thêm 20% ngân sách cho các chi phí phát sinh. Đổi ngoại tệ tại việt nam trước khi đi.' },
-              { emoji: '🨥', tip: 'Hồ sơ visa', desc: 'Kiểm tra yêu cầu visa ít nhất 1 tháng trước. Một số nước miễn visa hoặc visa on arrival cho hộ chiếu Việt Nam.' },
-              { emoji: '🌡️', tip: 'Thời tiết địa phương', desc: 'Mùa khô (dry season) thường là thời điểm lý tưởng. Tránh mùa bão và mùa mưa dài ở các nước Châu Á.' },
-            ].map((item, i) => (
-              <div key={i} className="flex gap-4 p-5 glass-panel rounded-xl hover:-translate-y-0.5 transition-transform duration-200">
-                <div className="text-3xl flex-shrink-0">{item.emoji}</div>
-                <div>
-                  <div className="font-bold text-sm text-on-surface mb-1">{item.tip}</div>
-                  <div className="text-xs text-on-surface-variant opacity-75 leading-relaxed">{item.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ══════════════════ CTA BANNER ══════════════════ */}
-      <section className="py-20 px-6 md:px-12 sidebar-offset">
+      <section className="py-20 px-6 md:px-12">
         <div className="max-w-4xl mx-auto glass-panel rounded-3xl p-12 text-center relative overflow-hidden">
           {/* Decorative blobs */}
           <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-[60px] pointer-events-none opacity-30"
@@ -335,7 +321,7 @@ function HomePage() {
           <span className="text-on-surface-variant hover:text-primary transition-opacity font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/')}>Hỗ trợ</span>
           <span className="text-primary underline font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/destinations')}>Điểm đến</span>
         </div>
-        <p className="text-secondary font-body-md text-body-md mt-6 opacity-60">© 2026 Trợ lý du lịch. Thiết kế dành cho những người thích dịch chuyển.</p>
+        <p className="text-secondary font-body-md text-body-md mt-6 opacity-60">GVHD: ThS. Phạm Thị Trúc Mai | Sinh viên thực hiện: Thạch Thị Xuân Linh_DA22TTA_110122013</p>
       </footer>
     </div>
   );

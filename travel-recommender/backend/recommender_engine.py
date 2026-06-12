@@ -269,8 +269,16 @@ class RecommenderEngine:
             print(f"[ENGINE] get_matched_rules_info failed: {e}")
             return []
 
-    def search(self, query, limit=10):
-        """Search destinations by name or country"""
+    def search(self, query, limit=50):
+        """
+        Search destinations by keyword across multiple fields:
+        - Destination Name (highest priority)
+        - Country
+        - Type / Broader_Type
+        - Continent / country_subregion
+        - Description
+        Results are ranked by relevance score + avg rating.
+        """
         if self.destinations.empty:
             self.load_data()
 
@@ -278,29 +286,125 @@ class RecommenderEngine:
             return []
 
         df = self.destinations.copy()
-        mask = (
-            df['Destination Name'].str.contains(query, case=False, na=False) |
-            df['Country'].str.contains(query, case=False, na=False)
-        )
-        results = df[mask]
+        q = query.strip().lower()
 
+        # Build relevance score for each row
+        def relevance(row):
+            score = 0
+            name    = str(row.get('Destination Name', '')).lower()
+            country = str(row.get('Country', '')).lower()
+            dest_type = str(row.get('Type', '')).lower()
+            broader  = str(row.get('Broader_Type', '')).lower()
+            continent = str(row.get('Continent', '')).lower()
+            subregion = str(row.get('country_subregion', '')).lower()
+            desc    = str(row.get('Description', '')).lower()
+            capital = str(row.get('country_capital', '')).lower()
+
+            if q == name:              score += 100  # exact name match
+            elif q in name:            score += 60   # partial name match
+            if q == country:           score += 80   # exact country
+            elif q in country:         score += 50   # partial country
+            if q in capital:           score += 30   # capital city
+            if q in dest_type:         score += 25   # type keyword (beach, mountain...)
+            if q in broader:           score += 20
+            if q in continent:         score += 15
+            if q in subregion:         score += 15
+            if q in desc:              score += 10   # description mention
+            return score
+
+        df['_rel_score'] = df.apply(relevance, axis=1)
+        results = df[df['_rel_score'] > 0].copy()
+
+        if results.empty:
+            return []
+
+        # Sort by relevance desc, then Avg Rating desc, then has_desc
         if 'Avg Rating' in results.columns:
-            results['has_desc'] = results['Description'].apply(
-                lambda x: 1 if pd.notnull(x) and str(x).strip() != '' and str(x).lower() != 'nan' else 0
+            results['_has_desc'] = results['Description'].apply(
+                lambda x: 1 if pd.notnull(x) and str(x).strip() not in ('', 'nan') else 0
             )
-            results = results.sort_values(by=['has_desc', 'Avg Rating'], ascending=[False, False])
-            results = results.drop(columns=['has_desc'])
+            results = results.sort_values(
+                by=['_rel_score', '_has_desc', 'Avg Rating'],
+                ascending=[False, False, False]
+            )
+            results = results.drop(columns=['_has_desc'])
+        else:
+            results = results.sort_values(by=['_rel_score'], ascending=False)
 
+        results = results.drop(columns=['_rel_score'])
         results = results.head(limit)
         results = results.astype(object).where(pd.notnull(results), None)
         return results.to_dict('records')
 
     def get_similar(self, destination_name, limit=5):
-        """Get similar destinations using Collaborative Filtering + Content-Based fallback"""
-        recs = collaborative_recommender.get_similar_destinations(destination_name, limit)
-        if recs:
-            return recs
-        return content_recommender.get_similar(destination_name, limit)
+        """Get similar destinations prioritizing same type and same country"""
+        try:
+            from sklearn.metrics.pairwise import cosine_similarity
+            
+            # Get all destinations
+            all_dests = content_recommender.destinations
+            if all_dests.empty:
+                return []
+            
+            # Find target index
+            idx_list = all_dests[all_dests['Destination Name'].str.lower() == destination_name.lower()].index
+            if len(idx_list) == 0:
+                print(f"[WARNING] Destination '{destination_name}' not found for similarity matching.")
+                return []
+            idx = idx_list[0]
+            target = all_dests.iloc[idx]
+            
+            # Compute base content-based similarity scores
+            sim_scores = cosine_similarity(content_recommender.tfidf_matrix[idx], content_recommender.tfidf_matrix).flatten()
+            
+            # Try to get collaborative filtering similarity index
+            collab_scores = {}
+            if collaborative_recommender.item_similarity_df is not None and target['Destination Name'] in collaborative_recommender.item_similarity_df.index:
+                collab_scores = collaborative_recommender.item_similarity_df[target['Destination Name']].to_dict()
+
+            # Create a DataFrame to score and sort candidates
+            df = all_dests.copy()
+            df['sim_score'] = sim_scores
+            
+            # Exclude the target destination itself
+            df = df[df.index != idx]
+            
+            target_country = str(target.get('Country', '')).lower().strip()
+            target_type = str(target.get('Type', '')).lower().strip()
+            
+            def calculate_similarity_rank(row):
+                # Start with TF-IDF similarity (0.0 to 1.0)
+                score = row['sim_score']
+                
+                # Add collaborative filtering score if available
+                row_name = row['Destination Name']
+                if row_name in collab_scores:
+                    score += collab_scores[row_name] * 0.5 # weight collaborative filtering
+                
+                row_country = str(row.get('Country', '')).lower().strip()
+                row_type = str(row.get('Type', '')).lower().strip()
+                
+                # High boost for same country
+                if row_country == target_country:
+                    score += 5.0
+                    
+                # High boost for same type
+                if row_type == target_type:
+                    score += 3.0
+                    
+                return score
+                
+            df['final_score'] = df.apply(calculate_similarity_rank, axis=1)
+            df = df.sort_values(by='final_score', ascending=False)
+            
+            # Select top limit
+            results = df.head(limit).copy()
+            results = results.astype(object).where(pd.notnull(results), None)
+            return results.to_dict('records')
+            
+        except Exception as e:
+            print(f"[ERROR] get_similar failed, falling back: {e}")
+            return content_recommender.get_similar(destination_name, limit)
 
 
 # Create global instance

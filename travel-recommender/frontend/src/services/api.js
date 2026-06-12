@@ -17,6 +17,13 @@ export const getOrCreateUserId = () => {
   return uid;
 };
 
+export const authApi = {
+  register: (username, password, fullName, email) => api.post('/auth/register', { username, password, full_name: fullName, email }),
+  login:    (username, password)           => api.post('/auth/login', { username, password }),
+  forgotPassword: (email)                  => api.post('/auth/forgot-password', { email }),
+  resetPassword: (email, token, newPassword) => api.post('/auth/reset-password', { email, token, new_password: newPassword }),
+};
+
 // ── API Services ─────────────────────────────────────────────────────────────
 export const destinationsApi = {
   getAll:          (params = {})          => api.get('/destinations', { params }),
@@ -39,7 +46,12 @@ export const filtersApi = {
 };
 
 export const chatApi = {
-  sendMessage: (message, history = []) => api.post('/chat', { message, conversation_history: history }),
+  sendMessage: (message, history = [], recommendationContext = null, sessionId = 'default') =>
+    api.post('/chat', { message, conversation_history: history, recommendation_context: recommendationContext, session_id: sessionId }),
+  getSessions: (userId) => api.get('/chat/sessions', { params: { user_id: userId } }),
+  getSession: (sessionId) => api.get(`/chat/sessions/${sessionId}`),
+  saveSession: (sessionId, userId, title, messages) => api.post('/chat/sessions', { session_id: sessionId, user_id: userId, title, messages }),
+  deleteSession: (sessionId) => api.delete(`/chat/sessions/${sessionId}`),
 };
 
 export const dataApi = {

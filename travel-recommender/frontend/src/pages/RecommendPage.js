@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recommendationsApi } from '../services/api';
-import { getDestinationImage } from '../services/imageService';
+import { getDestinationImage, getFallbackImage } from '../services/imageService';
+import { useRecommendation } from '../contexts/RecommendationContext';
+import { translateDestinationName, translateCountry, translateCategory, translateSeason } from '../utils/translator';
 import './RecommendPage.css';
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 // Mùa theo lịch du lịch Việt Nam
 const SEASONS = [
-  { value: 'Spring', label: 'Xuân',      emoji: '🌸', desc: 'Tháng 1 – 3 · Tết, lễ hội, dịu mát' },
-  { value: 'Summer', label: 'Hè',        emoji: '☀️', desc: 'Tháng 4 – 8 · Nắng đẹp, biển, nghỉ hè' },
-  { value: 'Autumn', label: 'Thu',       emoji: '🍂', desc: 'Tháng 9 – 10 · Mát mẻ, lúa vàng, thanh bình' },
-  { value: 'Winter', label: 'Đông',      emoji: '❄️', desc: 'Tháng 11 – 12 · Se lạnh, Giáng Sinh' },
+  { value: 'Spring', label: 'Xuân',  emoji: '🌸', desc: 'Tháng 1 – 3 · Tết, lễ hội, dịu mát' },
+  { value: 'Summer', label: 'Hạ',    emoji: '☀️', desc: 'Tháng 4 – 6 · Nắng đẹp, biển, nghỉ hạ' },
+  { value: 'Autumn', label: 'Thu',   emoji: '🍂', desc: 'Tháng 7 – 9 · Mát mẻ, lúa vàng, thanh bình' },
+  { value: 'Winter', label: 'Đông',  emoji: '❄️', desc: 'Tháng 10 – 12 · Se lạnh, Giáng Sinh' },
 ];
 
 const CATEGORIES = [
@@ -210,7 +212,9 @@ function getDestTagline(dest, prefs) {
 
 
 function DestResultCard({ dest, prefs, rank, onClick }) {
-  const imgUrl = dest.image || getDestinationImage(dest['Destination Name'], dest.Type);
+  const name = dest['Destination Name'] || '';
+  const country = translateCountry(dest.Country || '');
+  const imgUrl = dest.image || getDestinationImage(name, dest.Type, dest.Country);
   const tagline = getDestTagline(dest, prefs);
   const rating = dest['Avg Rating'] || dest['avg_rating'];
   const cost = dest['Avg Cost (USD/day)'];
@@ -219,8 +223,8 @@ function DestResultCard({ dest, prefs, rank, onClick }) {
       <div className="wizard-dest-img-wrap">
         <img
           src={imgUrl}
-          alt={dest['Destination Name']}
-          onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600'; }}
+          alt={name}
+          onError={(e) => { e.target.src = getFallbackImage(name, dest.Type); }}
         />
         {/* Rank badge */}
         {rank <= 3 && (
@@ -240,11 +244,11 @@ function DestResultCard({ dest, prefs, rank, onClick }) {
       <div className="wizard-dest-body">
         {/* Type chip */}
         <div className="wizard-dest-type-chip">
-          {dest.Type || 'Điểm đến'}
+          {translateCategory(dest.Type) || 'Điểm đến'}
         </div>
-        <div className="wizard-dest-name">{dest['Destination Name']}</div>
+        <div className="wizard-dest-name">{name}</div>
         <div className="wizard-dest-country">
-          {dest.country_flag || '🌍'} {dest.Country}
+          {dest.country_flag || '🌍'} {country}
           {cost && <span className="wizard-dest-cost"> · ${cost}/ngày</span>}
         </div>
         {/* Emotional tagline */}
@@ -252,7 +256,7 @@ function DestResultCard({ dest, prefs, rank, onClick }) {
         {/* Info pills */}
         <div className="wizard-dest-info-pills">
           {dest['Best Season'] && (
-            <span className="wizard-info-pill">📅 {dest['Best Season']}</span>
+            <span className="wizard-info-pill">📅 {translateSeason(dest['Best Season'])}</span>
           )}
           {dest['UNESCO Site'] === 'Yes' && (
             <span className="wizard-info-pill wizard-info-pill--special">🏅 UNESCO</span>
@@ -267,6 +271,7 @@ function DestResultCard({ dest, prefs, rank, onClick }) {
 
 function RecommendPage() {
   const navigate = useNavigate();
+  const { updateRecommendation, clearRecommendation } = useRecommendation();
 
   // Wizard state
   const [step, setStep]         = useState(0); // 0,1,2 = input steps; 3 = results
@@ -302,8 +307,12 @@ function RecommendPage() {
         season, category, budget, limit: 12
       });
       if (response.data.success) {
-        setResults(response.data.recommendations || []);
-        setMatchedRules(response.data.matched_rules || []);
+        const recs = response.data.recommendations || [];
+        const rules = response.data.matched_rules || [];
+        setResults(recs);
+        setMatchedRules(rules);
+        // Cập nhật context để chatbot biết ngữ cảnh gợi ý
+        updateRecommendation({ season, category, budget }, recs, rules);
       }
     } catch (err) {
       setError('Không thể tải gợi ý. Vui lòng thử lại.');
@@ -320,6 +329,7 @@ function RecommendPage() {
     setResults([]);
     setMatchedRules([]);
     setError(null);
+    clearRecommendation();
   };
 
   // ── Render ────────────────────────────────────────────────────

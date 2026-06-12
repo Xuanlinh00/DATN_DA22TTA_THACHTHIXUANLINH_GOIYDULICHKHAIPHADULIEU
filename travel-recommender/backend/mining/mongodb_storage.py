@@ -195,6 +195,64 @@ class MongoDBStorage:
             print(f"[ERROR] load_poi failed: {e}")
             return []
 
+    # Chat Sessions Operations
+    def save_chat_session(self, session_id: str, user_id: str, title: str, messages: list):
+        if not self.is_connected():
+            return False
+        try:
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            self.db.chat_sessions.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "session_id": session_id,
+                        "user_id": user_id,
+                        "title": title,
+                        "messages": messages,
+                        "updated_at": now
+                    },
+                    "$setOnInsert": {
+                        "created_at": now
+                    }
+                },
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            print(f"[ERROR] save_chat_session failed: {e}")
+            return False
+
+    def load_chat_sessions(self, user_id: str):
+        if not self.is_connected():
+            return []
+        try:
+            # Sort by updated_at descending
+            sessions = list(self.db.chat_sessions.find({"user_id": user_id}, {"_id": 0}).sort("updated_at", -1))
+            return sessions
+        except Exception as e:
+            print(f"[ERROR] load_chat_sessions failed: {e}")
+            return []
+
+    def load_chat_session(self, session_id: str):
+        if not self.is_connected():
+            return None
+        try:
+            return self.db.chat_sessions.find_one({"session_id": session_id}, {"_id": 0})
+        except Exception as e:
+            print(f"[ERROR] load_chat_session failed: {e}")
+            return None
+
+    def delete_chat_session(self, session_id: str):
+        if not self.is_connected():
+            return False
+        try:
+            self.db.chat_sessions.delete_one({"session_id": session_id})
+            return True
+        except Exception as e:
+            print(f"[ERROR] delete_chat_session failed: {e}")
+            return False
+
     def seed_all(self):
         """Seed all processed CSV files into MongoDB"""
         print("[SEED] Starting database seeding from CSV files...")
