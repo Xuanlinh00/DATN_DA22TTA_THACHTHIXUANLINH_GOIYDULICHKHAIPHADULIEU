@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { destinationsApi, getOrCreateUserId } from '../services/api';
-import { getDestinationImage, getFallbackImage } from '../services/imageService';
+import { getDestinationImage, getFallbackImage, EXACT_DESTINATION_IMAGES } from '../services/imageService';
 import DestinationCard from '../components/DestinationCard';
 import ClimateChart from '../components/ClimateChart';
 import { translateCountry, translateCategory, translateSeason, translateDestinationName } from '../utils/translator';
@@ -118,10 +118,17 @@ function DestinationDetailPage() {
     );
   }
 
-  const isValidUrl = (url) => url && typeof url === 'string' && url.startsWith('http');
-  const imageUrl = isValidUrl(destination.image)
-    ? destination.image
-    : getDestinationImage(destination['Destination Name'], destination.Type, destination.Country);
+  const isValidUrl = (url) => {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
+    const lower = url.toLowerCase();
+    if (lower.includes('.pdf') || lower.includes('.djvu')) return false;
+    return true;
+  };
+  const imageUrl = EXACT_DESTINATION_IMAGES[destination['Destination Name']]
+    ? EXACT_DESTINATION_IMAGES[destination['Destination Name']]
+    : (isValidUrl(destination.image)
+      ? destination.image
+      : getDestinationImage(destination['Destination Name'], destination.Type, destination.Country));
 
   const destName = destination['Destination Name'] ?? 'N/A';
   const hasDesc = destination.Description && String(destination.Description).toLowerCase() !== 'nan' && destination.Description.trim() !== '';

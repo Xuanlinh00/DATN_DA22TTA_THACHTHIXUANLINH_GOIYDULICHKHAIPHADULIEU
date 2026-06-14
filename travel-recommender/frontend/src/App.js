@@ -12,6 +12,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ChatbotWidget from './components/ChatbotWidget';
 import ThemeSwitcher from './components/ThemeSwitcher';
+import WorldMapPage from './pages/WorldMapPage';
 import { RecommendationProvider } from './contexts/RecommendationContext';
 import { AuthProvider } from './contexts/AuthContext';
 import './App.css';
@@ -28,6 +29,7 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/destinations" element={<DestinationsPage />} />
                 <Route path="/destinations/:name" element={<DestinationDetailPage />} />
+                <Route path="/map" element={<WorldMapPage />} />
                 <Route path="/recommend" element={<RecommendPage />} />
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/login" element={<LoginPage />} />

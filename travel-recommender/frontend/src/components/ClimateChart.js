@@ -9,9 +9,9 @@ const MONTH_FULL_VI = [
 ];
 
 const MONTH_SHORT_VI = [
-  'Th.1', 'Th.2', 'Th.3', 'Th.4',
-  'Th.5', 'Th.6', 'Th.7', 'Th.8',
-  'Th.9', 'Th.10', 'Th.11', 'Th.12',
+  'T1', 'T2', 'T3', 'T4',
+  'T5', 'T6', 'T7', 'T8',
+  'T9', 'T10', 'T11', 'T12',
 ];
 
 const MONTH_MAP_VI = {

@@ -45,6 +45,12 @@ function Navbar() {
           Điểm Đến
         </Link>
         <Link 
+          className={`navbar-link-custom ${isActive('/map') ? 'active' : ''}`} 
+          to="/map"
+        >
+          🗺️ Bản Đồ
+        </Link>
+        <Link 
           className={`navbar-link-custom ${isActive('/recommend') ? 'active' : ''}`} 
           to="/recommend"
         >
@@ -114,6 +120,16 @@ function Navbar() {
             to="/destinations"
           >
             Điểm Đến
+          </Link>
+          <Link 
+            className={`font-body-lg text-body-md py-2 px-4 rounded-xl transition-all ${
+              isActive('/map') 
+                ? 'navbar-mobile-active font-bold' 
+                : 'text-on-surface-variant hover:bg-secondary-container/20'
+            }`} 
+            to="/map"
+          >
+            🗺️ Bản Đồ
           </Link>
           <Link 
             className={`font-body-lg text-body-md py-2 px-4 rounded-xl transition-all ${

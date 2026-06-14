@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDestinationImage, getFallbackImage } from '../services/imageService';
+import { getDestinationImage, getFallbackImage, EXACT_DESTINATION_IMAGES } from '../services/imageService';
 import { translateCountry, translateCategory, translateSeason, translateDestinationName } from '../utils/translator';
 import './DestinationCard.css';
 
@@ -52,11 +52,17 @@ function DestinationCard({ destination, rank, selected = false, onMapPin }) {
     ? String(rawDesc)
     : '';
 
-  const isValidUrl = (url) => url && typeof url === 'string' && url.startsWith('http');
+  const isValidUrl = (url) => {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
+    // Reject Wikipedia PDF/DJVU thumbnails (wrong images)
+    const lower = url.toLowerCase();
+    if (lower.includes('.pdf') || lower.includes('.djvu')) return false;
+    return true;
+  };
 
   const imageUrl = imgError 
     ? getFallbackImage(name, destination['Type'] ?? '')
-    : (isValidUrl(destination.image) ? destination.image : getDestinationImage(name, destination['Type'] ?? '', rawCountry));
+    : (EXACT_DESTINATION_IMAGES[name] ? EXACT_DESTINATION_IMAGES[name] : (isValidUrl(destination.image) ? destination.image : getDestinationImage(name, destination['Type'] ?? '', rawCountry)));
 
   const handleCardClick = () => {
     navigate(`/destinations/${encodeURIComponent(name)}`);

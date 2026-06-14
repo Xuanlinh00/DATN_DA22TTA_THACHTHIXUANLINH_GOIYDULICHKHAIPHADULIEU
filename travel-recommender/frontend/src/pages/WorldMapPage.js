@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-routing-machine';
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import { destinationsApi, recommendationsApi } from '../services/api';
 import { getDestinationImage, getFallbackImage } from '../services/imageService';
 import { translateDestinationName, translateCountry, translateCategory, translateSeason } from '../utils/translator';
@@ -40,6 +42,53 @@ function MapController({ center, zoom }) {
   return null;
 }
 
+// Helper component to display the route
+function RoutingMachine({ start, end }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!start || !end) return;
+
+    const routingControl = L.Routing.control({
+      waypoints: [
+        L.latLng(start[0], start[1]),
+        L.latLng(end[0], end[1])
+      ],
+      routeWhileDragging: false,
+      showAlternatives: false,
+      fitSelectedRoutes: true,
+      lineOptions: {
+        styles: [{ color: '#c24482', weight: 5, opacity: 0.8 }]
+      },
+      addWaypoints: false, // Prevents adding waypoints by dragging the line
+      createMarker: (i, waypoint, n) => {
+        // Create standard markers for start (A) and end (B)
+        const markerIcon = L.icon({
+          iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+          iconAnchor: [12, 41]
+        });
+        return L.marker(waypoint.latLng, {
+          draggable: false,
+          icon: markerIcon
+        });
+      }
+    }).addTo(map);
+
+    return () => {
+      try {
+        if (map && routingControl) {
+          map.removeControl(routingControl);
+        }
+      } catch (e) {
+        console.warn("Could not remove routing control", e);
+      }
+    };
+  }, [map, start, end]);
+
+  return null;
+}
+
 function WorldMapPage() {
   const navigate = useNavigate();
   const [destinations, setDestinations] = useState([]);
@@ -57,6 +106,12 @@ function WorldMapPage() {
 
   // Selected destination state for Quick Info Card
   const [selectedDest, setSelectedDest] = useState(null);
+
+  // Routing states
+  const [userLocation, setUserLocation] = useState(null);
+  const [routingStart, setRoutingStart] = useState(null);
+  const [routingEnd, setRoutingEnd] = useState(null);
+  const [isRouting, setIsRouting] = useState(false);
 
   useEffect(() => {
     loadMapDestinations();
@@ -134,6 +189,48 @@ function WorldMapPage() {
     setSelectedDest(dest);
     setMapCenter([dest.destination_latitude, dest.destination_longitude]);
     setMapZoom(5);
+    // Auto-update route end point if currently routing
+    if (isRouting && routingStart) {
+      setRoutingEnd([dest.destination_latitude, dest.destination_longitude]);
+    }
+  };
+
+  const handleDirections = () => {
+    if (!selectedDest) return;
+    
+    const endCoords = [selectedDest.destination_latitude, selectedDest.destination_longitude];
+    
+    if (userLocation) {
+      setRoutingStart(userLocation);
+      setRoutingEnd(endCoords);
+      setIsRouting(true);
+    } else {
+      // Request geolocation
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const loc = [position.coords.latitude, position.coords.longitude];
+            setUserLocation(loc);
+            setRoutingStart(loc);
+            setRoutingEnd(endCoords);
+            setIsRouting(true);
+          },
+          (error) => {
+            alert("Không thể lấy vị trí của bạn để tính toán đường đi. Vui lòng cấp quyền truy cập vị trí trên trình duyệt.");
+            console.error("Geolocation error:", error);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      } else {
+        alert("Trình duyệt của bạn không hỗ trợ định vị (Geolocation).");
+      }
+    }
+  };
+
+  const clearRoute = () => {
+    setIsRouting(false);
+    setRoutingStart(null);
+    setRoutingEnd(null);
   };
 
   const infoImage = selectedDest 
@@ -156,6 +253,10 @@ function WorldMapPage() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
+
+          {isRouting && routingStart && routingEnd && (
+            <RoutingMachine start={routingStart} end={routingEnd} />
+          )}
 
           {destinations.map((dest, idx) => (
             <Marker
@@ -292,19 +393,31 @@ function WorldMapPage() {
                 }
               </p>
               
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button 
                   onClick={() => navigate(`/destinations/${encodeURIComponent(selectedDest['Destination Name'])}`)}
-                  className="bg-primary text-white rounded-full px-6 py-2.5 font-label-caps text-[10px] font-bold hover:opacity-90 transition-all shadow-md uppercase tracking-wider"
+                  className="bg-primary text-white rounded-full px-5 py-2.5 font-label-caps text-[10px] font-bold hover:opacity-90 transition-all shadow-md uppercase tracking-wider"
                 >
-                  Đặt Trải Nghiệm
+                  Xem Chi Tiết
                 </button>
                 <button 
-                  onClick={() => navigate(`/destinations/${encodeURIComponent(selectedDest['Destination Name'])}`)}
-                  className="border border-primary text-primary rounded-full px-6 py-2.5 font-label-caps text-[10px] font-bold hover:bg-primary/5 transition-all uppercase tracking-wider"
+                  onClick={handleDirections}
+                  className="bg-blue-600 text-white rounded-full px-5 py-2.5 font-label-caps text-[10px] font-bold hover:bg-blue-700 transition-all shadow-md uppercase tracking-wider flex items-center gap-1.5"
                 >
-                  Tìm Hiểu Thêm
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.242-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Chỉ Đường
                 </button>
+                {isRouting && (
+                  <button 
+                    onClick={clearRoute}
+                    className="border border-red-500 text-red-500 rounded-full px-5 py-2.5 font-label-caps text-[10px] font-bold hover:bg-red-50 transition-all uppercase tracking-wider"
+                  >
+                    Hủy Chỉ Đường
+                  </button>
+                )}
               </div>
             </div>
           </div>

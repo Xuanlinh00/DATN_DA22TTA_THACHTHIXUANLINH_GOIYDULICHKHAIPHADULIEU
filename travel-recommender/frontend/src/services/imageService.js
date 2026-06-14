@@ -240,8 +240,9 @@ const IMAGES_BY_TYPE = {
 };
 
 // ── EXACT IMAGES: Hình ảnh đã kiểm duyệt cho từng địa điểm cụ thể ────────
-const EXACT_DESTINATION_IMAGES = {
+export const EXACT_DESTINATION_IMAGES = {
   // ─── Châu Á ───────────────────────────────────────────
+  'Seoul Tower & Palace': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Front_view_of_the_tower_of_Jibokjae_Hall_under_blue_sky_at_Gyeongbokgung_Palace_in_Seoul.jpg/1280px-Front_view_of_the_tower_of_Jibokjae_Hall_under_blue_sky_at_Gyeongbokgung_Palace_in_Seoul.jpg',
   'Marina Bay Sands & Gardens': 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=800&auto=format&fit=crop&q=80',
   'Maldives Overwater Villas': 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=800&auto=format&fit=crop&q=80',
   'Taj Mahal': 'https://images.unsplash.com/photo-1564507592937-25994a9015b2?w=800&auto=format&fit=crop&q=80',
@@ -292,7 +293,11 @@ const EXACT_DESTINATION_IMAGES = {
   'Phu Quoc Sunset Beach': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
   'Trang An Scenic Landscape': 'https://images.unsplash.com/photo-1528127269322-539801943592?w=800&auto=format&fit=crop&q=80',
 
-  // ─── Châu Âu ──────────────────────────────────────────
+  // ─── Châu Âu ─────────────────────────────────────────
+  'Rotterdam Futuristic Architecture': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/GraphyArchy_-_Wikipedia_00096.jpg/1280px-GraphyArchy_-_Wikipedia_00096.jpg',
+  'Ghent Castle of the Counts': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Gent_Gravensteen_R01.jpg/1280px-Gent_Gravensteen_R01.jpg',
+  'Kronborg Castle Elsinore': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Kronborg_002.JPG/1280px-Kronborg_002.JPG',
+  'Bergen Bryggen Wharf': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Bryggen%2C_Bergen%2C_Noruega%2C_2019-09-08%2C_DD_115-117_PAN.jpg/1280px-Bryggen%2C_Bergen%2C_Noruega%2C_2019-09-08%2C_DD_115-117_PAN.jpg',
   'Zermatt Matterhorn Peak': 'https://images.unsplash.com/photo-1502784444187-359ac186c5bb?w=800&auto=format&fit=crop&q=80',
   'Santorini Island Sunsets': 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&auto=format&fit=crop&q=80',
   'Interlaken Adventure': 'https://images.unsplash.com/photo-1527668752968-14dc70a27c95?w=800&auto=format&fit=crop&q=80',
