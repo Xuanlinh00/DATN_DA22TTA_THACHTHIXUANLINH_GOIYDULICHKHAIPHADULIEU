@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recommendationsApi } from '../services/api';
-import { getDestinationImage, getFallbackImage } from '../services/imageService';
+import { getDestinationImage, getFallbackImage, resolveCategoryKey } from '../services/imageService';
 import { useRecommendation } from '../contexts/RecommendationContext';
-import { translateDestinationName, translateCountry, translateCategory, translateSeason } from '../utils/translator';
+import { useAuth } from '../contexts/AuthContext';
+import { translateCountry, translateCategory, translateSeason, stripDisplayName } from '../utils/translator';
+import Footer from '../components/Footer';
 import './RecommendPage.css';
 
 // ── Data ─────────────────────────────────────────────────────────────────────
@@ -127,7 +129,7 @@ const TAGLINE_POOL = {
     (s, b, n, c) => `🗿 Nếu bạn thích khám phá di sản cổ đại — đây là nơi thời gian như ngừng trôi!`,
     (s, b, n, c) => `🎨 Nếu bạn mê ẩm thực địa phương và nghệ thuật truyền thống — ${n} sẽ không bao giờ làm bạn thất vọng!`,
     (s, b, n, c) => `📜 Mỗi góc nhỏ của ${n} đều thấm đẫm lịch sử — một chuyến đi học hỏi thực sự giá trị!`,
-    (s, b, n, c) => `🏮 ${c} nổi tiếng với các lễ hội truyền thống rực rỡ — ${s === 'Spring' ? 'mùa xuân là thời điểm lý tưởng nhất!' : 'và ${n} là cổng vào thế giới đó!'}`,
+    (s, b, n, c) => `🏮 ${c} nổi tiếng với các lễ hội truyền thống rực rỡ — ${s === 'Spring' ? 'mùa xuân là thời điểm lý tưởng nhất!' : `và ${n} là cổng vào thế giới đó!`}`,
   ],
   nature: [
     (s, b, n, c) => `🌿 Nếu bạn cần thoát khỏi thành phố và lấy lại năng lượng — thiên nhiên ${n} sẽ chữa lành bạn!`,
@@ -213,8 +215,9 @@ function getDestTagline(dest, prefs) {
 
 function DestResultCard({ dest, prefs, rank, onClick }) {
   const name = dest['Destination Name'] || '';
+  const displayName = stripDisplayName(name);
   const country = translateCountry(dest.Country || '');
-  const imgUrl = dest.image || getDestinationImage(name, dest.Type, dest.Country);
+  const imgUrl = getDestinationImage(name, dest.Type, dest.Country);
   const tagline = getDestTagline(dest, prefs);
   const rating = dest['Avg Rating'] || dest['avg_rating'];
   const cost = dest['Avg Cost (USD/day)'];
@@ -244,9 +247,9 @@ function DestResultCard({ dest, prefs, rank, onClick }) {
       <div className="wizard-dest-body">
         {/* Type chip */}
         <div className="wizard-dest-type-chip">
-          {translateCategory(dest.Type) || 'Điểm đến'}
+          {translateCategory(resolveCategoryKey(dest.Type, dest['Destination Name'])) || 'Điểm đến'}
         </div>
-        <div className="wizard-dest-name">{name}</div>
+        <div className="wizard-dest-name">{displayName}</div>
         <div className="wizard-dest-country">
           {dest.country_flag || '🌍'} {country}
           {cost && <span className="wizard-dest-cost"> · ${cost}/ngày</span>}
@@ -272,6 +275,7 @@ function DestResultCard({ dest, prefs, rank, onClick }) {
 function RecommendPage() {
   const navigate = useNavigate();
   const { updateRecommendation, clearRecommendation } = useRecommendation();
+  const { isAuthenticated, updatePreferences } = useAuth();
 
   // Wizard state
   const [step, setStep]         = useState(0); // 0,1,2 = input steps; 3 = results
@@ -281,7 +285,6 @@ function RecommendPage() {
 
   // Results state
   const [results, setResults]           = useState([]);
-  const [matchedRules, setMatchedRules] = useState([]);
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState(null);
 
@@ -310,9 +313,13 @@ function RecommendPage() {
         const recs = response.data.recommendations || [];
         const rules = response.data.matched_rules || [];
         setResults(recs);
-        setMatchedRules(rules);
         // Cập nhật context để chatbot biết ngữ cảnh gợi ý
         updateRecommendation({ season, category, budget }, recs, rules);
+        if (isAuthenticated) {
+          updatePreferences({ season, category, budget }).catch((prefErr) => {
+            console.warn('Failed to save user preferences:', prefErr);
+          });
+        }
       }
     } catch (err) {
       setError('Không thể tải gợi ý. Vui lòng thử lại.');
@@ -327,7 +334,6 @@ function RecommendPage() {
     setCategory('');
     setBudget('');
     setResults([]);
-    setMatchedRules([]);
     setError(null);
     clearRecommendation();
   };
@@ -514,6 +520,7 @@ function RecommendPage() {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 }

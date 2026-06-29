@@ -9,12 +9,12 @@ export function AuthProvider({ children }) {
 
   // Initialize Auth state from localStorage
   useEffect(() => {
-    const storedUser = localStorage.getItem('nomadai_user');
+    const storedUser = localStorage.getItem('Nâu_user');
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
       } catch (e) {
-        localStorage.removeItem('nomadai_user');
+        localStorage.removeItem('Nâu_user');
       }
     }
     setLoading(false);
@@ -26,8 +26,8 @@ export function AuthProvider({ children }) {
       if (response.data.success) {
         const userData = response.data.user;
         setUser(userData);
-        localStorage.setItem('nomadai_user', JSON.stringify(userData));
-        localStorage.setItem('nomadai_user_id', userData.username); // Link CF/Ratings to username
+        localStorage.setItem('Nâu_user', JSON.stringify(userData));
+        localStorage.setItem('Nâu_user_id', userData.username); // Link CF/Ratings to username
         return { success: true, message: response.data.message };
       }
       return { success: false, message: response.data.message || 'Đăng nhập thất bại' };
@@ -54,12 +54,47 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem('nomadai_user');
+    localStorage.removeItem('Nâu_user');
     
     // Clear and restore a fresh anonymous ID for guest use
-    localStorage.removeItem('nomadai_user_id');
+    localStorage.removeItem('Nâu_user_id');
     getOrCreateUserId(); 
   }, []);
+
+  const changePassword = useCallback(async (username, currentPassword, newPassword) => {
+    try {
+      const response = await authApi.changePassword(username, currentPassword, newPassword);
+      if (response.data.success) {
+        return { success: true, message: response.data.message };
+      }
+      return { success: false, message: response.data.message || 'Đổi mật khẩu thất bại' };
+    } catch (error) {
+      console.error('Change password error:', error);
+      const msg = error.response?.data?.detail || 'Kết nối máy chủ thất bại';
+      return { success: false, message: msg };
+    }
+  }, []);
+
+  const updatePreferences = useCallback(async (preferences) => {
+    if (!user?.username) {
+      return { success: false, message: 'NgÆ°á»i dÃ¹ng chÆ°a Ä‘Äƒng nháº­p' };
+    }
+
+    try {
+      const response = await authApi.updatePreferences(user.username, preferences);
+      if (response.data.success) {
+        const userData = response.data.user;
+        setUser(userData);
+        localStorage.setItem('Nâu_user', JSON.stringify(userData));
+        return { success: true, message: response.data.message };
+      }
+      return { success: false, message: response.data.message || 'Cáº­p nháº­t sá»Ÿ thÃ­ch tháº¥t báº¡i' };
+    } catch (error) {
+      console.error('Update preferences error:', error);
+      const msg = error.response?.data?.detail || 'Káº¿t ná»‘i mÃ¡y chá»§ tháº¥t báº¡i';
+      return { success: false, message: msg };
+    }
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{
@@ -68,6 +103,8 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      changePassword,
+      updatePreferences,
       isAuthenticated: !!user
     }}>
       {!loading && children}

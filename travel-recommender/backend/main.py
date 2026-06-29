@@ -7,6 +7,12 @@ import sys
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
+# Load .env từ thư mục gốc dự án (1 cấp trên backend/)
+from pathlib import Path
+from dotenv import load_dotenv
+_root_env = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=_root_env, override=True)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -45,6 +51,14 @@ app.add_middleware(
 # Include API routes
 app.include_router(router, prefix="/api")
 
+# Mount static directory for uploads
+from fastapi.staticfiles import StaticFiles
+import os
+static_dir = Path(__file__).parent / "static"
+static_dir.mkdir(exist_ok=True)
+(static_dir / "uploads").mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
 @app.get("/")
 async def root():
     return {
@@ -62,5 +76,5 @@ if __name__ == "__main__":
     print("[INFO] API: http://localhost:8000")
     print("[INFO] Docs: http://localhost:8000/docs")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-# Trigger reload to load clean destinations (no fake data)
+# Trigger reload to load clean destinations (no duplicate names) - 2
 

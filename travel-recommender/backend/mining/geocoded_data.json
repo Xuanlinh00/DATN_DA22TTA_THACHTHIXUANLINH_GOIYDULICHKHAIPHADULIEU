@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-06-15T04:57:49",
+  "total_destinations": 5,
+  "total_countries": 1,
+  "destinations": {
+    "Oslo Fjords & Museum Peninsula": {
+      "lat": 59.91333,
+      "lon": 10.73897,
+      "display_name": "Oslo, Norway",
+      "country": "Norway"
+    },
+    "Tromsø Northern Lights Hunting": {
+      "lat": 69.651635,
+      "lon": 18.955859,
+      "display_name": "Tromsø, Troms, Norway",
+      "country": "Norway"
+    },
+    "Geirangerfjord Cruising": {
+      "lat": 62.103144,
+      "lon": 7.098859,
+      "display_name": "Geirangerfjord, Geiranger, Stranda, Møre og Romsdal, Norway",
+      "country": "Norway"
+    },
+    "Bergen Bryggen Wharf": {
+      "lat": 60.397726,
+      "lon": 5.322933,
+      "display_name": "Bryggen, Skuteviken, Bergenhus, Bergen, Vestland, 5003, Norway",
+      "country": "Norway"
+    },
+    "Lofoten Islands Scenic Tour": {
+      "lat": 60.511204,
+      "lon": 5.537529,
+      "display_name": "Kletten, Osterøy, Vestland, 5282, Norway",
+      "country": "Norway"
+    }
+  },
+  "countries": {
+    "Norway": {
+      "flag": "🇳🇴",
+      "currency": "NOK",
+      "capital": "Oslo",
+      "alpha2": "NO",
+      "alpha3": "NOR",
+      "lat": 62.0,
+      "lon": 10.0,
+      "region": "",
+      "subregion": "",
+      "symbol": "N",
+      "languages": "",
+      "timezone": "UTC",
+      "pop": 0,
+      "area": 0,
+      "borders": "",
+      "source": "countrynow_api"
+    }
+  }
+}

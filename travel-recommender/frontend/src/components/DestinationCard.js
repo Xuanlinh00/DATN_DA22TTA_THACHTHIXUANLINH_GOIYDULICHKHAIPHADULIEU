@@ -1,37 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDestinationImage, getFallbackImage, EXACT_DESTINATION_IMAGES } from '../services/imageService';
-import { translateCountry, translateCategory, translateSeason, translateDestinationName } from '../utils/translator';
+import { getDestinationImage, getFallbackImage, getExactDestinationImage, resolveCategoryKey } from '../services/imageService';
+import { translateCountry, translateCategory, translateSeason, stripDisplayName } from '../utils/translator';
 import './DestinationCard.css';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function StarRating({ value }) {
-  if (!value && value !== 0) return <span className="text-xs text-secondary opacity-50">N/A</span>;
-  const num = Number(value);
-  const filled = Math.round(num);
-  return (
-    <div className="flex items-center gap-0.5" title={`${num.toFixed(1)} / 5`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span
-          key={i}
-          className="material-symbols-outlined text-[14px]"
-          style={{ 
-            fontVariationSettings: "'FILL' " + (i < filled ? 1 : 0),
-            color: i < filled ? '#f59e0b' : '#dac0c9'
-          }}
-        >
-          star
-        </span>
-      ))}
-      <span className="text-xs font-bold text-on-surface ml-1">{num.toFixed(1)}</span>
-    </div>
-  );
-}
-
 // ── Main Component ───────────────────────────────────────────────────────────
 
-function DestinationCard({ destination, rank, selected = false, onMapPin }) {
+function DestinationCard({ destination, rank, selected = false, onMapPin, imageVariant = 0 }) {
   const navigate = useNavigate();
   const [imgError, setImgError] = useState(false);
 
@@ -40,8 +17,12 @@ function DestinationCard({ destination, rank, selected = false, onMapPin }) {
 
   // ── Field extraction ─────────────────────────────────────────────────────
   const name = destination['Destination Name'] ?? 'N/A';
+  const displayName = stripDisplayName(name);
   const country = translateCountry(destination['Country'] ?? 'N/A');
-  const type = translateCategory(destination['Type'] ?? '');
+  // ── Resolve correct category from name keywords (CSV Type field is unreliable) ──
+  const rawType = destination['Type'] ?? '';
+  const resolvedKey = resolveCategoryKey(rawType, name);
+  const type = translateCategory(resolvedKey);
   const season = translateSeason(destination['Best Season'] ?? '');
   const avgCost = destination['Avg Cost (USD/day)'];
   const avgRating = destination['Avg Rating'] ?? destination['Rating'];
@@ -52,17 +33,11 @@ function DestinationCard({ destination, rank, selected = false, onMapPin }) {
     ? String(rawDesc)
     : '';
 
-  const isValidUrl = (url) => {
-    if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
-    // Reject Wikipedia PDF/DJVU thumbnails (wrong images)
-    const lower = url.toLowerCase();
-    if (lower.includes('.pdf') || lower.includes('.djvu')) return false;
-    return true;
-  };
-
-  const imageUrl = imgError 
-    ? getFallbackImage(name, destination['Type'] ?? '')
-    : (EXACT_DESTINATION_IMAGES[name] ? EXACT_DESTINATION_IMAGES[name] : (isValidUrl(destination.image) ? destination.image : getDestinationImage(name, destination['Type'] ?? '', rawCountry)));
+  // Ưu tiên: 1) exact curated image → 2) IMAGES_BY_TYPE (name-keyword resolution) → 3) fallback
+  const exactImg = getExactDestinationImage(name, imageVariant);
+  const imageUrl = imgError
+    ? getFallbackImage(name, rawType, imageVariant)
+    : (exactImg || getDestinationImage(name, rawType, rawCountry, imageVariant));
 
   const handleCardClick = () => {
     navigate(`/destinations/${encodeURIComponent(name)}`);
@@ -73,91 +48,97 @@ function DestinationCard({ destination, rank, selected = false, onMapPin }) {
     if (onMapPin) onMapPin(destination);
   };
 
+  const getDynamicAspectRatio = (name) => {
+    const sum = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const mod = sum % 3;
+    if (mod === 0) return 'aspect-[3/4]'; // Tall portrait
+    if (mod === 1) return 'aspect-[1/1]'; // Square
+    return 'aspect-[4/3]'; // Landscape
+  };
+
   return (
     <article
-      className={`glass-panel p-5 rounded-xl hover:shadow-[0_40px_80px_rgba(136,19,55,0.08)] transition-all duration-700 cursor-pointer group flex flex-col justify-between ${
+      className={`glass-panel p-4 pb-5 rounded-2xl shadow-[0_4px_20px_rgba(194,68,130,0.02)] hover:shadow-[0_12px_32px_rgba(194,68,130,0.06)] transition-all duration-500 cursor-pointer group flex flex-col justify-between bg-white border border-pink-100/30 hover:-translate-y-1 ${
         selected ? 'ring-2 ring-primary ring-offset-2' : ''
       }`}
       onClick={handleCardClick}
     >
       <div>
-        {/* Image Frame */}
-        <div className="overflow-hidden rounded-lg mb-4 relative aspect-[4/3] w-full">
+        {/* Image Frame with Staggered Aspect Ratio */}
+        <div className={`overflow-hidden rounded-xl mb-4 relative w-full ${getDynamicAspectRatio(name)}`}>
           <img
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[1.2s] ease-out"
             src={imageUrl}
             alt={name}
             loading="lazy"
             onError={() => setImgError(true)}
           />
           {rank && (
-            <span className="absolute top-3 right-3 bg-primary-container text-white w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-md">
+            <span className="absolute top-3 right-3 bg-primary text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shadow-md z-10">
               #{rank}
             </span>
           )}
-          <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+          
+          {/* Overlay Tag Badges */}
+          <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
             {type && (
-              <span className="bg-secondary-container/80 backdrop-blur-md text-on-secondary-container px-3 py-1 rounded-full font-label-caps text-[9px] uppercase tracking-wider">
+              <span className="bg-secondary/80 backdrop-blur-md text-white px-2.5 py-0.5 rounded-full font-label-caps text-[8px] uppercase tracking-wider">
                 {type}
               </span>
             )}
             {season && (
-              <span className="bg-tertiary-fixed/80 backdrop-blur-md text-on-tertiary-fixed-variant px-3 py-1 rounded-full font-label-caps text-[9px] uppercase tracking-wider">
+              <span className="bg-primary/85 backdrop-blur-md text-white px-2.5 py-0.5 rounded-full font-label-caps text-[8px] uppercase tracking-wider">
                 {season}
               </span>
             )}
           </div>
+
+          {/* Floating Map Pin Button */}
+          {onMapPin && (
+            <button
+              type="button"
+              className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-white/90 backdrop-blur-md text-primary flex items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all active:scale-90 z-20"
+              onClick={handleMapPin}
+              title="Xem trên bản đồ"
+            >
+              <span className="material-symbols-outlined text-[16px]">map</span>
+            </button>
+          )}
         </div>
 
         {/* Content Body */}
         <div className="px-1 text-left">
-          <h3 className="font-display-lg text-headline-md text-primary mb-1 truncate font-bold">
-            {name}
+          <h3 className="font-display text-lg text-primary mb-1 font-bold group-hover:text-primary/80 transition-colors">
+            {displayName}
           </h3>
-          <div className="flex items-center gap-1 text-secondary opacity-80 mb-3">
-            <span className="material-symbols-outlined text-[16px] text-primary">location_on</span>
-            <span className="font-label-caps text-[10px] tracking-wider uppercase font-semibold">
+          
+          <div className="flex items-center gap-1 text-secondary/70 mb-2">
+            <span className="material-symbols-outlined text-[14px]">location_on</span>
+            <span className="font-label-caps text-[9px] tracking-wider uppercase font-semibold">
               {country} {countryFlag}
             </span>
           </div>
 
+          {/* Inline rating & budget details */}
+          <div className="flex items-center gap-2 text-[11px] text-secondary/80 mb-3">
+            {avgRating && (
+              <span className="flex items-center gap-0.5">
+                <span className="material-symbols-outlined text-[12px] text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                <span className="font-bold text-on-surface">{Number(avgRating).toFixed(1)}</span>
+              </span>
+            )}
+            {avgRating && avgCost && <span className="opacity-40">•</span>}
+            {avgCost != null && (
+              <span>
+                <span className="font-semibold text-primary">${Number(avgCost).toLocaleString()}</span>/ngày
+              </span>
+            )}
+          </div>
+
           {description && (
-            <p className="font-body-md text-on-surface-variant text-xs line-clamp-2 mb-4 leading-relaxed">
+            <p className="font-body-md text-on-surface-variant text-[11px] line-clamp-2 leading-relaxed opacity-90">
               {description}
             </p>
-          )}
-        </div>
-      </div>
-
-      {/* Metadata & Actions footer */}
-      <div>
-        <div className="flex justify-between items-center px-1 py-3 border-t border-pink-100/50 mt-2">
-          <StarRating value={avgRating} />
-          
-          {avgCost != null && (
-            <div className="flex items-center text-xs font-bold text-on-surface">
-              <span className="material-symbols-outlined text-xs text-primary mr-0.5">payments</span>
-              <span>${Number(avgCost).toLocaleString()}</span>
-              <span className="text-[9px] text-secondary font-medium ml-0.5">/ngày</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2 mt-2">
-          <button
-            className="flex-1 py-3 bg-primary text-white rounded-full font-label-caps text-[10px] tracking-wider uppercase hover:opacity-90 active:scale-95 transition-all text-center"
-            onClick={handleCardClick}
-          >
-            Chi tiết
-          </button>
-          {onMapPin && (
-            <button
-              className="flex-1 py-3 glass text-primary rounded-full font-label-caps text-[10px] tracking-wider uppercase hover:bg-white/40 active:scale-95 transition-all flex items-center justify-center gap-1"
-              onClick={handleMapPin}
-            >
-              <span className="material-symbols-outlined text-xs">map</span>
-              Bản đồ
-            </button>
           )}
         </div>
       </div>

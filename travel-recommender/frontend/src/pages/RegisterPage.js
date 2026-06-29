@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Footer from '../components/Footer';
 import './RegisterPage.css';
 
 function RegisterPage() {
@@ -216,6 +217,7 @@ function RegisterPage() {
           </p>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

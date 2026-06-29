@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017")
 DB_NAME = os.getenv("MONGO_DB_NAME", "travel_recommender")
 
 class MongoDBStorage:
@@ -22,6 +22,8 @@ class MongoDBStorage:
         self.db_name = db_name
         self.client = None
         self.db = None
+        self._cached_destinations = None
+        self._cached_rules = None
         self.connect()
 
     def connect(self):
@@ -32,10 +34,12 @@ class MongoDBStorage:
             self.client.server_info()
             self.db = self.client[self.db_name]
             print(f"[OK] Connected to MongoDB at {self.uri}, Database: {self.db_name}")
+            return True
         except Exception as e:
             print(f"[ERROR] Failed to connect to MongoDB: {e}")
             self.client = None
             self.db = None
+            return False
 
     def is_connected(self):
         return self.db is not None
@@ -52,6 +56,7 @@ class MongoDBStorage:
             return False
         try:
             self.db.destinations.drop()
+            self._cached_destinations = None
             records = df_or_list if isinstance(df_or_list, list) else self.clean_records(df_or_list)
             if records:
                 import copy
@@ -63,10 +68,15 @@ class MongoDBStorage:
             return False
 
     def load_destinations(self):
+        if self._cached_destinations is not None:
+            return self._cached_destinations
         if not self.is_connected():
             return []
         try:
-            return list(self.db.destinations.find({}, {"_id": 0}))
+            dests = list(self.db.destinations.find({}, {"_id": 0}))
+            if dests:
+                self._cached_destinations = dests
+            return dests
         except Exception as e:
             print(f"[ERROR] load_destinations failed: {e}")
             return []
@@ -77,6 +87,7 @@ class MongoDBStorage:
             return False
         try:
             self.db.rules.drop()
+            self._cached_rules = None
             records = df_or_list if isinstance(df_or_list, list) else self.clean_records(df_or_list)
             if records:
                 import copy
@@ -88,10 +99,15 @@ class MongoDBStorage:
             return False
 
     def load_rules(self):
+        if self._cached_rules is not None:
+            return self._cached_rules
         if not self.is_connected():
             return []
         try:
-            return list(self.db.rules.find({}, {"_id": 0}))
+            rules = list(self.db.rules.find({}, {"_id": 0}))
+            if rules:
+                self._cached_rules = rules
+            return rules
         except Exception as e:
             print(f"[ERROR] load_rules failed: {e}")
             return []

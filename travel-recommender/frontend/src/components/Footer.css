@@ -1,0 +1,31 @@
+.app-footer {
+  margin-top: auto;
+  width: 100%;
+  padding: 2.5rem 1.5rem;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--theme-primary-bg, #fbe4f2) 58%, transparent) 100%
+  );
+  border-top: 1px solid var(--glass-border, rgba(194, 68, 130, 0.1));
+  text-align: center;
+}
+
+.app-footer p {
+  margin: 0;
+  color: var(--text-secondary, #544249);
+  font-family: var(--font-body, Inter, system-ui, sans-serif);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+@media (max-width: 768px) {
+  .app-footer {
+    padding: 2rem 1rem;
+  }
+
+  .app-footer p {
+    font-size: 0.78rem;
+  }
+}

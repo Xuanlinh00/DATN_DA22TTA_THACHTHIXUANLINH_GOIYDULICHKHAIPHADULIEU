@@ -152,7 +152,7 @@ class RecommenderEngine:
 
         return df
 
-    def get_recommendations(self, filters=None, limit=10, user_id=None):
+    def get_recommendations(self, filters=None, limit=10, user_id=None, strict=False, strict_country=False):
         """
         Get recommendations using the FULL Hybrid approach:
 
@@ -172,7 +172,7 @@ class RecommenderEngine:
         if self.destinations.empty:
             self.load_data()
 
-        # ── Step 1: Filter ───────────────────────────────────────────
+        # ── Step 1: Filter with Soft Relaxation ───────────────────────
         candidates_df = self.filter_destinations(
             season=filters.get('season'),
             budget=filters.get('budget'),
@@ -180,8 +180,65 @@ class RecommenderEngine:
             country=filters.get('country')
         )
 
-        if candidates_df.empty:
-            return []
+        relaxed_by = []
+        # strict=True: no relaxation at all
+        # strict_country=True: country is locked, but season/budget/category may relax
+        if strict:
+            pass  # no relaxation
+        elif candidates_df.empty:
+            locked_country = filters.get('country') if strict_country else None
+
+            # 1. Relax Country filter (only if not strict_country)
+            if not strict_country and filters.get('country'):
+                relaxed_by.append('country')
+                print(f"[ENGINE] 0 candidates found. Relaxing filter: country='{filters.get('country')}'")
+                candidates_df = self.filter_destinations(
+                    season=filters.get('season'),
+                    budget=filters.get('budget'),
+                    category=filters.get('category'),
+                    country=None
+                )
+
+            # 2. Relax Budget filter
+            if candidates_df.empty and filters.get('budget'):
+                relaxed_by.append('budget')
+                print(f"[ENGINE] 0 candidates found. Relaxing filter: budget='{filters.get('budget')}'")
+                candidates_df = self.filter_destinations(
+                    season=filters.get('season'),
+                    budget=None,
+                    category=filters.get('category'),
+                    country=locked_country or (None if 'country' in relaxed_by else filters.get('country'))
+                )
+
+            # 3. Relax Season filter
+            if candidates_df.empty and filters.get('season'):
+                relaxed_by.append('season')
+                print(f"[ENGINE] 0 candidates found. Relaxing filter: season='{filters.get('season')}'")
+                candidates_df = self.filter_destinations(
+                    season=None,
+                    budget=None if 'budget' in relaxed_by else filters.get('budget'),
+                    category=filters.get('category'),
+                    country=locked_country or (None if 'country' in relaxed_by else filters.get('country'))
+                )
+
+            # 4. Relax Category filter
+            if candidates_df.empty and filters.get('category'):
+                relaxed_by.append('category')
+                print(f"[ENGINE] 0 candidates found. Relaxing filter: category='{filters.get('category')}'")
+                candidates_df = self.filter_destinations(
+                    season=None,
+                    budget=None,
+                    category=None,
+                    country=locked_country
+                )
+
+            # 5. Final fallback: all destinations in country (or all if no country lock)
+            if candidates_df.empty:
+                candidates_df = self.filter_destinations(
+                    season=None, budget=None, category=None, country=locked_country
+                ) if locked_country else self.destinations.copy()
+
+            print(f"[ENGINE] Soft Filtering activated. Relaxed filters: {relaxed_by}. Found {len(candidates_df)} candidates.")
 
         candidates = candidates_df.to_dict('records')
 

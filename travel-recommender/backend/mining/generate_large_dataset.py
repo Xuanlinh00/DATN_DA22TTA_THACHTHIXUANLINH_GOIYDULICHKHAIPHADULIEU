@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Generate Large Dataset - Adds 36 new countries and 190+ new destinations
-to expand the dataset size to 300+ destinations and 60+ countries,
-and generates matching transaction rows in the binary transaction matrix
-so Apriori can mine massive amounts of rules.
+Tao ra Tap du lieu lon - Them 36 quoc gia moi va 190+ diem den moi
+de mo rong kich thuoc tap du lieu len 300+ diem den va 60+ quoc gia,
+va tao ra cac hang giao dich tuong ung trong ma tran giao dich nhi phan
+de Apriori co the khai pha so luong lon cac luat.
 """
 import sys
 import os
@@ -12,11 +12,11 @@ import numpy as np
 import copy
 from pathlib import Path
 
-# Add parent directory to path
+# Them thu muc cha vao duong dan
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from mining.mongodb_storage import db_storage
 
-# 36 new countries with metadata
+# 36 quoc gia moi cung voi sieu du lieu
 COUNTRY_METADATA = {
     "Norway": {
         "flag": "🇳🇴", "region": "Europe", "subregion": "Northern Europe",
@@ -236,7 +236,7 @@ COUNTRY_METADATA = {
     }
 }
 
-# Famous destinations across these 36 countries + additions to existing countries
+# Cac diem den noi tieng tren 36 quoc gia nay + bo sung cho cac quoc gia hien co
 NEW_DESTINATIONS_DATA = [
     # ── Norway ──
     {"Name": "Oslo Fjords & Museum Peninsula", "Country": "Norway", "Type": "Urban", "Cost": 180, "Season": "Summer", "Rating": 4.7, "Visitors": 2.1, "UNESCO": "No", "Lat": 59.9139, "Lon": 10.7522, "Desc": "Trải nghiệm đi du thuyền ngắm vịnh Oslo, tham quan bảo tàng tàu Viking cổ và thưởng thức ẩm thực Bắc Âu sang trọng."},
@@ -585,7 +585,7 @@ def generate():
             "destination_latitude": float(dest["Lat"]),
             "destination_longitude": float(dest["Lon"]),
             "destination_budget_level": cost_cat,
-            "Cluster": 0, # To be clustered by KMeans
+            "Cluster": 0, # Se duoc phan cum boi KMeans
             "Description": dest["Desc"]
         }
         added_destinations.append(new_dest)
@@ -612,7 +612,7 @@ def generate():
     df_updated_dests.to_csv(data_dir / "destinations_clean.csv", index=False)
     print(f"[GENERATE] Saved destinations to destinations_clustered.csv and destinations_clean.csv.")
     
-    # ── 2. TRANSACTIONS EXPANSION ──
+    # ── 2. MO RONG GIAO DICH ──
     print("\n[TRANSACTIONS] Expanding transactions binary matrix...")
     transactions = db_storage.load_transactions()
     if not transactions and (data_dir / "transactions.csv").exists():
@@ -626,10 +626,10 @@ def generate():
         
     df_trans = pd.DataFrame(transactions)
     
-    # We will generate 150 transaction rows for each NEW country added.
-    # Total new countries is 36.
-    # Total new transactions = 36 * 150 = 5,400 rows!
-    # Let's add them. First, make sure the columns for all countries exist in df_trans
+    # Chung ta se tao 150 hang giao dich cho moi quoc gia MOI duoc them vao.
+    # Tong so quoc gia moi la 36.
+    # Tong so giao dich moi = 36 * 150 = 5,400 hang!
+    # Hay them chung vao. Truoc tien, dam bao cac cot cho tat ca quoc gia da ton tai trong df_trans
     unique_new_countries = list(set([d["Country"] for d in added_destinations]))
     
     for c in unique_new_countries:
@@ -637,18 +637,18 @@ def generate():
         if new_col not in df_trans.columns:
             df_trans[new_col] = False
             
-    # Also ensure all types are represented
+    # Dong thoi dam bao tat ca cac loai hinh deu duoc the hien
     unique_new_types = list(set([d["Type"] for d in added_destinations]))
     for t in unique_new_types:
         new_col = f"Type:{t}"
         if new_col not in df_trans.columns:
             df_trans[new_col] = False
             
-    # Generate transaction rows
+    # Tao cac hang giao dich
     new_rows = []
     np.random.seed(42)
     
-    # Map country name to list of its destinations
+    # Anh xa ten quoc gia voi danh sach cac diem den cua no
     country_dest_map = {}
     for d in added_destinations:
         country_dest_map.setdefault(d["Country"], []).append(d)
@@ -658,26 +658,26 @@ def generate():
         if not c_dests:
             continue
             
-        # Generate 150 transactions for this country
+        # Tao 150 giao dich cho quoc gia nay
         for _ in range(150):
-            # Select a random destination of this country to represent features
+            # Chon ngau nhien mot diem den cua quoc gia nay de the hien cac dac trung
             rep_dest = np.random.choice(c_dests)
             
-            # Create a blank row of all columns in df_trans set to False
+            # Tao mot hang trong cho tat ca cac cot trong df_trans voi gia tri False
             row = {col: False for col in df_trans.columns}
             
-            # Set target features
+            # Thiet lap cac dac trung muc tieu
             row[f"Country:{c}"] = True
             row[f"Continent:{rep_dest['Continent']}"] = True
             row[f"Cost:{rep_dest['Cost_Category']}"] = True
             row[f"Season:{rep_dest['Best Season']}"] = True
             row[f"Type:{rep_dest['Type']}"] = True
             
-            # UNESCO Site feature
+            # Dac trung Dia diem UNESCO
             if rep_dest["UNESCO Site"] == "Yes" or np.random.rand() > 0.5:
                 row["Heritage:UNESCO"] = True
                 
-            # Quality rules
+            # Cac luat ve chat luong
             rating = rep_dest["Avg Rating"]
             if rating >= 4.7:
                 row["Quality:Excellent"] = True if np.random.rand() > 0.3 else False
@@ -688,11 +688,11 @@ def generate():
                 
             new_rows.append(row)
             
-    # Combine existing and new transactions
+    # Ket hop cac giao dich hien co va moi
     df_new_trans = pd.DataFrame(new_rows)
     df_updated_trans = pd.concat([df_trans, df_new_trans], ignore_index=True).fillna(False)
     
-    # Save transactions
+    # Luu cac giao dich
     if db_storage.is_connected():
         db_storage.save_transactions(df_updated_trans)
     else:

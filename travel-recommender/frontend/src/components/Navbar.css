@@ -30,16 +30,25 @@
 
 /* ── Brand Logo ─────────────────────────────────────────── */
 .navbar-logo-custom {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 1.6rem;
-  color: var(--text-accent, #c24482);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
   text-decoration: none;
-  transition: opacity 0.3s ease, color 0.4s ease;
+  transition: opacity 0.3s ease;
 }
 .navbar-logo-custom:hover {
-  opacity: 0.80;
+  opacity: 0.82;
+}
+.nau-logo-img {
+  height: 72px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 16px;
+  mix-blend-mode: multiply;
+  filter: drop-shadow(0 2px 4px rgba(139,69,19,0.2));
+  transition: height 0.3s ease;
+}
+.navbar-custom.scrolled .nau-logo-img {
+  height: 56px;
 }
 
 /* ── Desktop links ──────────────────────────────────────── */
@@ -51,7 +60,7 @@
 
 .navbar-link-custom {
   font-family: 'Inter', sans-serif;
-  font-size: 0.9rem;
+  font-size: 1.05rem;
   font-weight: 500;
   color: var(--text-secondary, #765469);
   text-decoration: none;
@@ -134,5 +143,129 @@ html[data-theme="midnight"] .navbar-custom {
 }
 html[data-theme="midnight"] .navbar-custom.scrolled {
   background: rgba(15, 15, 26, 0.95) !important;
+}
+html[data-theme="midnight"] .nau-logo-img {
+  mix-blend-mode: screen !important;
+  filter: drop-shadow(0 2px 6px rgba(200,168,122,0.35)) brightness(1.1) !important;
+}
+
+/* ── Account Dropdown Menu ──────────────────────────────── */
+.navbar-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(255, 255, 255, 0.40);
+  border: 1px solid var(--glass-border, rgba(194, 68, 130, 0.20));
+  color: var(--text-accent, #c24482);
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(194, 68, 130, 0.04);
+}
+
+.navbar-dropdown-btn:hover {
+  background: rgba(255, 255, 255, 0.80);
+  border-color: var(--text-accent, #c24482);
+  box-shadow: 0 6px 16px rgba(194, 68, 130, 0.08);
+}
+
+.navbar-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 200px;
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border, rgba(194, 68, 130, 0.12));
+  border-radius: 1rem;
+  box-shadow: 0 10px 30px rgba(136, 19, 55, 0.08);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  z-index: 100;
+  animation: navbarFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes navbarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.navbar-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  color: var(--text-secondary, #765469);
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.navbar-dropdown-item:hover {
+  background: rgba(194, 68, 130, 0.06);
+  color: var(--text-accent, #c24482);
+}
+
+.navbar-dropdown-item.text-red-500 {
+  color: #ef4444;
+}
+
+.navbar-dropdown-item.text-red-500:hover {
+  background: rgba(239, 68, 68, 0.06);
+  color: #dc2626;
+}
+
+.navbar-dropdown-divider {
+  height: 1px;
+  background: var(--glass-border, rgba(194, 68, 130, 0.08));
+  margin: 0.25rem 0.5rem;
+}
+
+/* Dark mode theme overrides */
+html[data-theme="midnight"] .navbar-dropdown-btn {
+  background: rgba(15, 15, 26, 0.40) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+  color: #818cf8 !important;
+}
+
+html[data-theme="midnight"] .navbar-dropdown-btn:hover {
+  background: rgba(15, 15, 26, 0.80) !important;
+  border-color: #818cf8 !important;
+}
+
+html[data-theme="midnight"] .navbar-dropdown-menu {
+  background: rgba(15, 15, 26, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+html[data-theme="midnight"] .navbar-dropdown-item {
+  color: #a5b4fc !important;
+}
+
+html[data-theme="midnight"] .navbar-dropdown-item:hover {
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #c7d2fe !important;
+}
+
+html[data-theme="midnight"] .navbar-dropdown-divider {
+  background: rgba(99, 102, 241, 0.1) !important;
 }
 

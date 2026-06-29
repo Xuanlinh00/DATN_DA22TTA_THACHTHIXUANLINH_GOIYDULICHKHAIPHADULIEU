@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Footer from '../components/Footer';
 import './LoginPage.css';
 
 function LoginPage() {
@@ -142,6 +143,7 @@ function LoginPage() {
           </p>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

@@ -419,12 +419,26 @@
   white-space: nowrap;
 }
 
-/* Results grid */
+/* Results grid - 3 items per row */
 .wizard-results-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
   margin-bottom: 32px;
+}
+
+@media (max-width: 1200px) {
+  .wizard-results-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .wizard-results-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 }
 
 /* Result destination card */

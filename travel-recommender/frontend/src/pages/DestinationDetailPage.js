@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { destinationsApi, getOrCreateUserId } from '../services/api';
-import { getDestinationImage, getFallbackImage, EXACT_DESTINATION_IMAGES } from '../services/imageService';
+import { getDestinationImage, getFallbackImage, getExactDestinationImage, resolveCategoryKey } from '../services/imageService';
 import DestinationCard from '../components/DestinationCard';
 import ClimateChart from '../components/ClimateChart';
-import { translateCountry, translateCategory, translateSeason, translateDestinationName } from '../utils/translator';
+import Footer from '../components/Footer';
+import { translateCountry, translateCategory, translateSeason, translateDestinationName, stripDisplayName, fixDescription } from '../utils/translator';
 import './DestinationDetailPage.css';
 
 function DestinationDetailPage() {
@@ -118,23 +120,20 @@ function DestinationDetailPage() {
     );
   }
 
-  const isValidUrl = (url) => {
-    if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
-    const lower = url.toLowerCase();
-    if (lower.includes('.pdf') || lower.includes('.djvu')) return false;
-    return true;
-  };
-  const imageUrl = EXACT_DESTINATION_IMAGES[destination['Destination Name']]
-    ? EXACT_DESTINATION_IMAGES[destination['Destination Name']]
-    : (isValidUrl(destination.image)
-      ? destination.image
-      : getDestinationImage(destination['Destination Name'], destination.Type, destination.Country));
+  // Ưu tiên: 1) exact curated image → 2) IMAGES_BY_TYPE (name-keyword resolution) → 3) fallback
+  const imageUrl = getExactDestinationImage(destination['Destination Name'])
+    || getDestinationImage(destination['Destination Name'], destination.Type, destination.Country);
 
-  const destName = destination['Destination Name'] ?? 'N/A';
+  // Resolve correct category from name keywords (CSV Type field is unreliable)
+  const resolvedCategory = resolveCategoryKey(destination.Type, destination['Destination Name']);
+
+  const destName = stripDisplayName(destination['Destination Name']);
+  const fullName = destination['Destination Name'] ?? 'N/A';
   const hasDesc = destination.Description && String(destination.Description).toLowerCase() !== 'nan' && destination.Description.trim() !== '';
-  const descriptionText = hasDesc
-    ? destination.Description
-    : `Khám phá ${destName} - điểm đến ${translateCategory(destination.Type).toLowerCase()} tuyệt vời tại ${translateCountry(destination.Country)}. Nơi đây nổi tiếng với phong cảnh đẹp, khí hậu lý tưởng vào ${translateSeason(destination['Best Season']).toLowerCase()} và nhiều trải nghiệm du lịch hấp dẫn đang chờ đón bạn.`;
+  const rawDesc = hasDesc ? destination.Description : null;
+  const descriptionText = rawDesc
+    ? fixDescription(rawDesc, fullName)
+    : `Khám phá ${destName} - điểm đến ${translateCategory(resolvedCategory).toLowerCase()} tuyệt vời tại ${translateCountry(destination.Country)}. Nơi đây nổi tiếng với phong cảnh đẹp, khí hậu lý tưởng vào ${translateSeason(destination['Best Season']).toLowerCase()} và nhiều trải nghiệm du lịch hấp dẫn đang chờ đón bạn.`;
 
   const hasCoords = destination.destination_latitude != null && destination.destination_longitude != null &&
                     !isNaN(destination.destination_latitude) && !isNaN(destination.destination_longitude);
@@ -145,6 +144,22 @@ function DestinationDetailPage() {
 
   return (
     <div className="min-h-screen text-left" style={{ backgroundColor: '#fff7fa' }}>
+      <Helmet>
+        <title>{destName} - NÂU</title>
+        <meta name="description" content={descriptionText} />
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={`${destName} | NÂU`} />
+        <meta property="og:description" content={descriptionText} />
+        <meta property="og:image" content={imageUrl} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${destName} | NÂU`} />
+        <meta name="twitter:description" content={descriptionText} />
+        <meta name="twitter:image" content={imageUrl} />
+      </Helmet>
       
       {/* Back Button Pill */}
       <button 
@@ -203,9 +218,9 @@ function DestinationDetailPage() {
           <div className="glass-panel p-8 rounded-2xl shadow-[0_40px_80px_rgba(136,19,55,0.05)] transform md:-translate-x-12 relative z-20 text-left">
             <h2 className="font-display-lg text-headline-md text-primary mb-4">
               {destination['UNESCO Site'] === 'Yes'
-                ? `Di Sản UNESCO · ${translateCategory(destination.Type) || 'Điểm Đến'}`
-                : destination.Type
-                  ? `Điểm Đến ${translateCategory(destination.Type)}`
+                ? `Di Sản UNESCO · ${translateCategory(resolvedCategory) || 'Điểm Đến'}`
+                : resolvedCategory
+                  ? `Điểm Đến ${translateCategory(resolvedCategory)}`
                   : `Khám Phá ${destName}`}
             </h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed text-sm md:text-base">
@@ -246,7 +261,7 @@ function DestinationDetailPage() {
           <div className="glass-panel p-6 rounded-2xl grid grid-cols-2 gap-4 text-left">
             <div>
               <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Loại hình</p>
-              <p className="text-sm font-semibold text-primary mt-1">{translateCategory(destination.Type)}</p>
+              <p className="text-sm font-semibold text-primary mt-1">{translateCategory(resolvedCategory)}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Chi phí tb</p>
@@ -355,23 +370,13 @@ function DestinationDetailPage() {
           <h2 className="font-display-lg text-headline-lg text-primary mb-10">Điểm Đến Tương Tự</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {similarDestinations.map((dest, index) => (
-              <DestinationCard key={index} destination={dest} />
+              <DestinationCard key={index} destination={dest} imageVariant={index} />
             ))}
           </div>
         </section>
       )}
 
-      {/* Footer */}
-      <footer className="bg-surface-container-lowest py-16 flex flex-col items-center gap-6 w-full px-container-padding bg-gradient-to-t from-tertiary-fixed/20 to-transparent">
-        <div className="font-display-lg text-headline-md text-primary font-bold">Trợ lý du lịch</div>
-        <div className="flex flex-wrap justify-center gap-10">
-          <span className="text-on-surface-variant hover:text-primary transition-opacity font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/')}>Bảo mật</span>
-          <span className="text-on-surface-variant hover:text-primary transition-opacity font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/')}>Điều khoản</span>
-          <span className="text-on-surface-variant hover:text-primary transition-opacity font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/')}>Hỗ trợ</span>
-          <span className="text-primary underline font-label-caps text-label-caps cursor-pointer" onClick={() => navigate('/destinations')}>Điểm đến</span>
-        </div>
-        <p className="text-secondary font-body-md text-body-md mt-6 opacity-60">GVHD: ThS. Phạm Thị Trúc Mai | Sinh viên thực hiện: Thạch Thị Xuân Linh_DA22TTA_110122013</p>
-      </footer>
+      <Footer />
 
     </div>
   );

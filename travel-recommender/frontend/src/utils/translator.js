@@ -89,7 +89,7 @@ const CATEGORY_MAP = {
   'highland':     'Núi & Rừng',
   'trekking':     'Núi & Rừng',
   'cultural':     'Văn hoá & Lịch sử',
-  'historical':   'Lịch sử cổ đại',
+  'historical':   'Lịch sử',
   'heritage':     'Di sản',
   'nature':       'Thiên nhiên',
   'eco':          'Sinh thái',
@@ -296,6 +296,44 @@ export const translateSearchQuery = (query) => {
 
 
 // ── English → Vietnamese exports ────────────────────────────────────────────
+
+/**
+ * Strip country suffix in parentheses from destination name for display.
+ * e.g., "Sacred Ruins (Vietnam)" → "Sacred Ruins"
+ */
+export const stripDisplayName = (name) => {
+  if (!name) return 'N/A';
+  return name.replace(/\s*\([^)]*\)\s*$/, '').trim() || name;
+};
+
+// Map English category keywords to Vietnamese (for fixing CSV descriptions)
+const DESC_CATEGORY_FIX = {
+  'beach': 'biển', 'nature': 'thiên nhiên', 'adventure': 'phiêu lưu',
+  'historical': 'lịch sử', 'religious': 'tâm linh', 'cultural': 'văn hoá',
+  'city': 'thành phố', 'mountain': 'núi', 'waterfall': 'thác nước',
+  'urban': 'đô thị', 'eco': 'sinh thái', 'wildlife': 'hoang dã',
+  'safari': 'safari', 'resort': 'nghỉ dưỡng', 'heritage': 'di sản',
+};
+
+/**
+ * Fix CSV description: strip country from name, replace English category keywords with Vietnamese.
+ */
+export const fixDescription = (desc, fullName) => {
+  if (!desc) return '';
+  let d = String(desc);
+  // Remove "(Country)" from destination name within description
+  if (fullName) {
+    const stripped = stripDisplayName(fullName);
+    if (stripped !== fullName) {
+      d = d.split(fullName).join(stripped);
+    }
+  }
+  // Replace English category keywords with Vietnamese equivalents
+  for (const [eng, vie] of Object.entries(DESC_CATEGORY_FIX)) {
+    d = d.replace(new RegExp(`\\b${eng}\\b`, 'gi'), vie);
+  }
+  return d;
+};
 
 export const translateCountry = (country) => {
   if (!country) return '';

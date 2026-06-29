@@ -2,6 +2,5 @@
 Mining package initialization
 """
 from .hybrid_recommender import HybridRecommender, recommender
-from .preprocess import load_destinations, load_rules, load_cluster_profiles
 
-__all__ = ['HybridRecommender', 'recommender', 'load_destinations', 'load_rules', 'load_cluster_profiles']
+__all__ = ['HybridRecommender', 'recommender']

@@ -3,7 +3,7 @@ import { filtersApi } from '../services/api';
 import { translateCountry } from '../utils/translator';
 import './FilterPanel.css';
 
-function FilterPanel({ onFilterChange }) {
+function FilterPanel({ onFilterChange, inline = false }) {
   const [filters, setFilters] = useState({
     season: '',
     budget: '',
@@ -38,11 +38,9 @@ function FilterPanel({ onFilterChange }) {
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
-    onFilterChange(newFilters);
   };
 
   const toggleOption = (key, value) => {
-    // If already selected, clear it. Otherwise set it.
     const newValue = filters[key] === value ? '' : value;
     handleFilterChange(key, newValue);
   };
@@ -58,39 +56,52 @@ function FilterPanel({ onFilterChange }) {
     onFilterChange(emptyFilters);
   };
 
+  const applyFilters = () => {
+    onFilterChange(filters);
+    setIsOpen(false);
+  };
+
   const activeFilterCount = Object.values(filters).filter(v => v !== '').length;
 
   return (
     <>
-      {/* Floating Filter Toggle Trigger (Visible when panel is closed) */}
-      <button 
-        className={`fixed top-[100px] right-6 z-40 glass-panel p-4 rounded-full shadow-lg text-primary scale-100 transition-all duration-500 hover:scale-110 active:scale-95 flex items-center justify-center ${
-          isOpen ? 'opacity-0 scale-0 pointer-events-none' : 'opacity-100 scale-100'
-        }`}
-        onClick={() => setIsOpen(true)}
-      >
-        <span className="material-symbols-outlined text-2xl">tune</span>
-      </button>
+      {/* Floating Filter Toggle Trigger (Visible on mobile/tablet when panel is closed) */}
+      {(!inline || !isOpen) && (
+        <button 
+          className={`fixed top-[100px] right-6 z-40 glass-panel p-4 rounded-full shadow-lg text-primary scale-100 transition-all duration-500 hover:scale-110 active:scale-95 flex items-center justify-center ${
+            inline ? 'lg:hidden' : ''
+          } ${isOpen ? 'opacity-0 scale-0 pointer-events-none' : 'opacity-100 scale-100'}`}
+          onClick={() => setIsOpen(true)}
+        >
+          <span className="material-symbols-outlined text-2xl">tune</span>
+        </button>
+      )}
 
-      {/* Floating Filter Panel (Slides in from right) */}
+      {/* Filter Panel Container */}
       <aside 
-        className="fixed top-[100px] right-6 z-40 transition-all duration-500 ease-in-out"
-        style={{
+        className={inline ? "fixed top-[100px] right-6 z-40 transition-all duration-500 ease-in-out lg:static lg:z-0 lg:w-full lg:opacity-100 lg:pointer-events-auto" : "fixed top-[100px] right-6 z-40 transition-all duration-500 ease-in-out"}
+        style={inline && typeof window !== 'undefined' && window.innerWidth >= 1024 ? {
+          transition: 'none'
+        } : {
           transform: isOpen ? 'translateX(0)' : 'translateX(400px)',
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? 'all' : 'none',
           transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
       >
-        <div className="glass-panel rounded-2xl w-80 p-6 flex flex-col gap-6 shadow-[40px_0_80px_rgba(136,19,55,0.05)] max-h-[calc(100vh-140px)] overflow-y-auto">
+        <div className={`filter-panel-card glass-panel rounded-2xl p-6 flex flex-col gap-6 max-h-[calc(100vh-140px)] overflow-y-auto ${
+          inline ? 'w-full lg:max-h-none lg:p-7' : 'w-80'
+        }`}>
           {/* Header */}
-          <div className="flex justify-between items-center pb-2 border-b border-pink-100/50">
+          <div className="filter-panel-header flex justify-between items-center pb-2">
             <div>
-              <h2 className="font-display-lg text-xl font-bold text-primary">Bộ Lọc Chuyến Đi</h2>
-              <p className="font-label-caps text-[10px] text-secondary opacity-70 mt-0.5">Tinh chỉnh hành trình của bạn</p>
+              <h2 className="font-display text-xl font-bold text-primary">Bộ Lọc Chuyến Đi</h2>
+              <p className="font-body-md text-[10px] text-secondary opacity-70 mt-0.5">Refine your escape</p>
             </div>
             <button 
-              className="material-symbols-outlined text-primary p-2 hover:bg-primary-container/20 rounded-full transition-colors flex items-center justify-center"
+              className={`material-symbols-outlined text-primary p-2 hover:bg-primary-container/20 rounded-full transition-colors flex items-center justify-center ${
+                inline ? 'lg:hidden' : ''
+              }`}
               onClick={() => setIsOpen(false)}
             >
               close
@@ -108,10 +119,10 @@ function FilterPanel({ onFilterChange }) {
                   return (
                     <span 
                       key={season}
-                      className={`rounded-full px-3 py-1.5 font-label-caps text-[10px] cursor-pointer transition-all duration-200 ${
+                      className={`filter-chip rounded-full px-3 py-1.5 font-label-caps text-[10px] cursor-pointer transition-all duration-200 ${
                         isSelected 
-                          ? 'bg-primary-container text-white shadow-sm font-semibold' 
-                          : 'text-secondary bg-secondary-container/20 hover:bg-secondary-container/50'
+                          ? 'filter-chip--active text-white shadow-sm font-semibold' 
+                          : 'filter-chip--idle text-secondary'
                       }`}
                       onClick={() => toggleOption('season', season)}
                     >
@@ -131,10 +142,10 @@ function FilterPanel({ onFilterChange }) {
                   return (
                     <span 
                       key={category}
-                      className={`rounded-full px-3 py-1.5 font-label-caps text-[10px] cursor-pointer transition-all duration-200 ${
+                      className={`filter-chip rounded-full px-3 py-1.5 font-label-caps text-[10px] cursor-pointer transition-all duration-200 ${
                         isSelected 
-                          ? 'bg-primary-container text-white shadow-sm font-semibold' 
-                          : 'text-secondary bg-secondary-container/20 hover:bg-secondary-container/50'
+                          ? 'filter-chip--active text-white shadow-sm font-semibold' 
+                          : 'filter-chip--idle text-secondary'
                       }`}
                       onClick={() => toggleOption('category', category)}
                     >
@@ -151,7 +162,7 @@ function FilterPanel({ onFilterChange }) {
               <select
                 value={filters.budget}
                 onChange={(e) => handleFilterChange('budget', e.target.value)}
-                className="w-full p-2.5 bg-white/60 border border-pink-200 rounded-xl focus:ring-2 focus:ring-pink-400 focus:outline-none text-on-surface text-xs"
+                className="filter-select w-full p-2.5 rounded-xl focus:outline-none text-on-surface text-xs"
               >
                 <option value="">Tất cả</option>
                 {options.budgets.map(budget => (
@@ -168,7 +179,7 @@ function FilterPanel({ onFilterChange }) {
               <select
                 value={filters.country}
                 onChange={(e) => handleFilterChange('country', e.target.value)}
-                className="w-full p-2.5 bg-white/60 border border-pink-200 rounded-xl focus:ring-2 focus:ring-pink-400 focus:outline-none text-on-surface text-xs"
+                className="filter-select w-full p-2.5 rounded-xl focus:outline-none text-on-surface text-xs"
               >
                 <option value="">Tất cả</option>
                 {options.countries.map(country => (
@@ -180,15 +191,15 @@ function FilterPanel({ onFilterChange }) {
             {/* Apply & Reset Buttons */}
             <div className="flex flex-col gap-2 mt-4">
               <button 
-                className="w-full py-3.5 bg-primary-container hover:bg-primary-container/95 text-white rounded-full font-label-caps text-[11px] font-bold uppercase tracking-wider shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-1"
-                onClick={() => setIsOpen(false)}
+                className="filter-apply-btn w-full py-3.5 text-white rounded-full font-label-caps text-[11px] font-bold uppercase tracking-wider shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1"
+                onClick={applyFilters}
               >
                 <span className="material-symbols-outlined text-sm">done</span>
                 Áp Dụng Bộ Lọc
               </button>
               {activeFilterCount > 0 && (
                 <button 
-                  className="w-full py-3.5 bg-white border border-pink-200 text-primary rounded-full font-label-caps text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-pink-50 flex items-center justify-center gap-1"
+                  className="filter-clear-btn w-full py-3.5 text-primary rounded-full font-label-caps text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1"
                   onClick={clearFilters}
                 >
                   <span className="material-symbols-outlined text-sm">close</span>
@@ -200,10 +211,12 @@ function FilterPanel({ onFilterChange }) {
         </div>
       </aside>
 
-      {/* Overlay backdrop when open */}
+      {/* Overlay backdrop when open (mobile only) */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/10 backdrop-blur-[2px] z-30 transition-all duration-300"
+          className={`fixed inset-0 bg-black/10 backdrop-blur-[2px] z-30 transition-all duration-300 ${
+            inline ? 'lg:hidden' : ''
+          }`}
           onClick={() => setIsOpen(false)}
         />
       )}

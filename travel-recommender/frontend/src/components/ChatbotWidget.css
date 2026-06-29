@@ -13,3 +13,52 @@
 .history-panel-active {
   animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+.chatbot-window {
+  width: min(440px, calc(100vw - 32px));
+  min-width: 340px;
+  min-height: 440px;
+  transition: width 0.12s ease, height 0.12s ease;
+}
+
+.chatbot-resizing,
+.chatbot-resizing * {
+  cursor: nesw-resize !important;
+  user-select: none !important;
+}
+
+.chatbot-resize-handle {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, transparent 0 40%, rgba(164, 48, 115, 0.45) 40% 48%, transparent 48% 60%, rgba(164, 48, 115, 0.45) 60% 68%, transparent 68%),
+    rgba(255, 255, 255, 0.72);
+  box-shadow: 0 4px 12px rgba(164, 48, 115, 0.12);
+  cursor: nesw-resize;
+  z-index: 30;
+  opacity: 0.78;
+  transition: opacity 0.18s ease, transform 0.18s ease, background-color 0.18s ease;
+}
+
+.chatbot-resize-handle:hover {
+  opacity: 1;
+  transform: scale(1.08);
+  background-color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 520px) {
+  .chatbot-window {
+    width: calc(100vw - 24px) !important;
+    height: min(620px, calc(100vh - 112px)) !important;
+    min-width: 0;
+  }
+
+  .chatbot-resize-handle {
+    display: none;
+  }
+}

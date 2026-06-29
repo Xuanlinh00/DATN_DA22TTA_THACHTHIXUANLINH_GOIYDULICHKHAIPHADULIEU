@@ -9,10 +9,10 @@ const api = axios.create({
 
 // ── Helper: get or create anonymous user ID (stored in localStorage) ─────────
 export const getOrCreateUserId = () => {
-  let uid = localStorage.getItem('nomadai_user_id');
+  let uid = localStorage.getItem('Nâu_user_id');
   if (!uid) {
     uid = 'user_' + Math.random().toString(36).substring(2, 11);
-    localStorage.setItem('nomadai_user_id', uid);
+    localStorage.setItem('Nâu_user_id', uid);
   }
   return uid;
 };
@@ -21,7 +21,9 @@ export const authApi = {
   register: (username, password, fullName, email) => api.post('/auth/register', { username, password, full_name: fullName, email }),
   login:    (username, password)           => api.post('/auth/login', { username, password }),
   forgotPassword: (email)                  => api.post('/auth/forgot-password', { email }),
-  resetPassword: (email, token, newPassword) => api.post('/auth/reset-password', { email, token, new_password: newPassword }),
+  resetPassword:  (token, newPassword)     => api.post('/auth/reset-password',  { token, new_password: newPassword }),
+  changePassword: (username, currentPassword, newPassword) => api.post('/auth/change-password', { username, current_password: currentPassword, new_password: newPassword }),
+  updatePreferences: (username, preferences) => api.put('/auth/preferences', preferences, { params: { username } }),
 };
 
 // ── API Services ─────────────────────────────────────────────────────────────
@@ -67,6 +69,17 @@ export const adminApi = {
   runApriori: (minSupport, minConfidence, minLift) => api.post('/admin/mine-apriori', { min_support: minSupport, min_confidence: minConfidence, min_lift: minLift }),
   runClustering: (nClusters) => api.post('/admin/run-clustering', { n_clusters: nClusters }),
   refreshCF: () => api.post('/admin/refresh-cf'),
+  getUsers: () => api.get('/admin/users'),
+  deleteUser: (username) => api.delete(`/admin/users/${encodeURIComponent(username)}`),
+  toggleUserLock: (username) => api.put(`/admin/users/${encodeURIComponent(username)}/toggle-lock`),
+  evaluateSystem: (kValues = '5,10,20') => api.post('/admin/evaluate-system', {}, { params: { k_values: kValues } }),
+  getEvaluationMetrics: () => api.get('/admin/evaluation-metrics'),
+  getClusteringElbow: () => api.get('/admin/clustering/elbow'),
+  addDestination: (data) => api.post('/admin/destinations', data),
+  updateDestination: (name, data) => api.put(`/admin/destinations/${encodeURIComponent(name)}`, data),
+  deleteDestination: (name) => api.delete(`/admin/destinations/${encodeURIComponent(name)}`),
+  uploadDestinationImage: (name, formData) => api.post(`/admin/destinations/${encodeURIComponent(name)}/upload-image`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteDestinationImage: (name) => api.delete(`/admin/destinations/${encodeURIComponent(name)}/image`),
 };
 
 export default api;

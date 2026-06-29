@@ -136,7 +136,7 @@ const THEMES = [
   },
 ];
 
-const STORAGE_KEY = 'nomadai_theme';
+const STORAGE_KEY = 'Nâu_theme';
 
 // ── Apply theme to :root ──────────────────────────────────────────────────────
 function applyTheme(theme) {
