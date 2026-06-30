@@ -1,0 +1,34 @@
+# Dependency directories
+**/node_modules/
+**/venv/
+**/__pycache__/
+*.pyc
+
+# Local env files
+.env
+**/frontend/.env
+**/backend/.env
+
+# Build files
+**/frontend/build/
+**/frontend/node_modules/.cache/
+
+# Generated/raw local datasets
+**/backend/data/raw/
+**/backend/data/extracted/
+
+# System and logs
+.vscode/
+.claude/
+.kiro/
+*.log
+
+# Thesis outline/reports
+decuong/
+~$*.docx
+~WRL*.tmp
+
+# Large files and backups
+*.zip
+*.tar.gz
+*.rar
