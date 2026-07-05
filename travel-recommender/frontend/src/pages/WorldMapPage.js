@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { destinationsApi, recommendationsApi, filtersApi } from '../services/api';
-import { getDestinationImage, getFallbackImage, resolveCategoryKey } from '../services/imageService';
+import { getDatasetImage, getDestinationImage, getFallbackImage, resolveCategoryKey } from '../services/imageService';
 import {
   translateCountry, translateCategory, translateSeason,
   stripDisplayName, fixDescription
@@ -85,6 +85,7 @@ export default function WorldMapPage() {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
   const [filters,      setFilters]      = useState(INIT_FILTERS);
+  const [draftFilters, setDraftFilters] = useState(INIT_FILTERS);
   const [options,      setOptions]      = useState(EMPTY_OPTS);
   const [selectedDest, setSelectedDest] = useState(null);
   const [flyToDest,    setFlyToDest]    = useState(null);   // triggers MapFlyTo
@@ -148,14 +149,25 @@ export default function WorldMapPage() {
   useEffect(() => { loadDestinations(INIT_FILTERS); }, [loadDestinations]);
 
   /* ── filter change handler ────────────────────────────────────────────── */
-  const handleFilterChange = (key, value) => {
-    const next = { ...filters, [key]: value };
+  const handleDraftFilterChange = (key, value) => {
+    setDraftFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const applyFilters = () => {
+    setFilters(draftFilters);
+    loadDestinations(draftFilters);
+  };
+
+  const removeAppliedFilter = (key) => {
+    const next = { ...filters, [key]: '' };
     setFilters(next);
+    setDraftFilters(next);
     loadDestinations(next);
   };
 
   const resetFilters = () => {
     setFilters(INIT_FILTERS);
+    setDraftFilters(INIT_FILTERS);
     loadDestinations(INIT_FILTERS);
   };
 
@@ -179,6 +191,8 @@ export default function WorldMapPage() {
 
   /* ── active-filter count for badge ────────────────────────────────────── */
   const activeCount = Object.values(filters).filter(v => v !== '').length;
+  const draftActiveCount = Object.values(draftFilters).filter(v => v !== '').length;
+  const hasDraftChanges = JSON.stringify(filters) !== JSON.stringify(draftFilters);
 
   /* ════════════════════════════════════════════════════════════════════════ */
   return (
@@ -278,25 +292,25 @@ export default function WorldMapPage() {
               {filters.season && (
                 <ActiveChip
                   label={SEASON_LABEL[filters.season] || filters.season}
-                  onRemove={() => handleFilterChange('season', '')}
+                  onRemove={() => removeAppliedFilter('season')}
                 />
               )}
               {filters.budget && (
                 <ActiveChip
                   label={BUDGET_LABEL[filters.budget] || filters.budget}
-                  onRemove={() => handleFilterChange('budget', '')}
+                  onRemove={() => removeAppliedFilter('budget')}
                 />
               )}
               {filters.category && (
                 <ActiveChip
                   label={translateCategory(filters.category) || filters.category}
-                  onRemove={() => handleFilterChange('category', '')}
+                  onRemove={() => removeAppliedFilter('category')}
                 />
               )}
               {filters.country && (
                 <ActiveChip
                   label={'🌐 ' + (translateCountry(filters.country) || filters.country)}
-                  onRemove={() => handleFilterChange('country', '')}
+                  onRemove={() => removeAppliedFilter('country')}
                 />
               )}
             </div>
@@ -310,8 +324,8 @@ export default function WorldMapPage() {
             icon="🌤️"
             label="Mùa du lịch"
             hint="Chọn thời điểm bạn muốn đi"
-            value={filters.season}
-            onChange={v => handleFilterChange('season', v)}
+            value={draftFilters.season}
+            onChange={v => handleDraftFilterChange('season', v)}
             placeholder="Tất cả các mùa"
             options={options.seasons.map(s => ({ value: s, label: SEASON_LABEL[s] || s }))}
           />
@@ -320,8 +334,8 @@ export default function WorldMapPage() {
             icon="💰"
             label="Ngân sách"
             hint="Mức chi tiêu trung bình mỗi ngày"
-            value={filters.budget}
-            onChange={v => handleFilterChange('budget', v)}
+            value={draftFilters.budget}
+            onChange={v => handleDraftFilterChange('budget', v)}
             placeholder="Tất cả mức giá"
             options={options.budgets.map(b => ({ value: b, label: BUDGET_LABEL[b] || b }))}
           />
@@ -330,8 +344,8 @@ export default function WorldMapPage() {
             icon="🏷️"
             label="Loại hình du lịch"
             hint="Biển, thiên nhiên, văn hóa, mạo hiểm..."
-            value={filters.category}
-            onChange={v => handleFilterChange('category', v)}
+            value={draftFilters.category}
+            onChange={v => handleDraftFilterChange('category', v)}
             placeholder="Tất cả loại hình"
             options={options.categories.map(c => ({ value: c, label: translateCategory(c) || c }))}
           />
@@ -340,14 +354,44 @@ export default function WorldMapPage() {
             icon="🌍"
             label="Quốc gia"
             hint="Thu hẹp về một quốc gia cụ thể"
-            value={filters.country}
-            onChange={v => handleFilterChange('country', v)}
+            value={draftFilters.country}
+            onChange={v => handleDraftFilterChange('country', v)}
             placeholder="Tất cả quốc gia"
             options={options.countries.map(c => ({ value: c, label: translateCountry(c) || c }))}
           />
 
+          <button
+            onClick={applyFilters}
+            disabled={!hasDraftChanges}
+            style={{
+              marginTop: 4,
+              width: '100%',
+              background: hasDraftChanges
+                ? 'var(--grad-primary, linear-gradient(135deg, #c24482 0%, #e8679b 100%))'
+                : 'rgba(135,113,122,0.12)',
+              color: hasDraftChanges ? '#fff' : '#87717a',
+              border: 'none',
+              borderRadius: 12,
+              padding: '10px 12px',
+              fontFamily: 'Inter,sans-serif',
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: hasDraftChanges ? 'pointer' : 'default',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              boxShadow: hasDraftChanges ? '0 8px 18px rgba(194,68,130,0.22)' : 'none',
+              transition: 'all .15s',
+            }}
+          >
+            {hasDraftChanges
+              ? `Áp dụng ${draftActiveCount || 'tất cả'} tiêu chí`
+              : activeCount > 0
+                ? 'Bộ lọc đã áp dụng'
+                : 'Đang xem tất cả điểm đến'}
+          </button>
+
           {/* reset button — only when filters active */}
-          {activeCount > 0 && (
+          {(activeCount > 0 || draftActiveCount > 0) && (
             <button
               onClick={resetFilters}
               style={{
@@ -574,7 +618,7 @@ function ActiveChip({ label, onRemove }) {
 }
 
 function DestinationCard({ dest, onNavigate, onDirections, onClose }) {
-  const imgSrc = getDestinationImage(dest['Destination Name'], dest.Type, dest.Country);
+  const imgSrc = getDatasetImage(dest) || getDestinationImage(dest['Destination Name'], dest.Type, dest.Country);
   const desc = dest.Description && String(dest.Description).toLowerCase() !== 'nan' && dest.Description.trim()
     ? fixDescription(dest.Description, dest['Destination Name'])
     : `Khám phá ${stripDisplayName(dest['Destination Name'])} — điểm đến ${(translateCategory(resolveCategoryKey(dest.Type, dest['Destination Name'])) || '').toLowerCase()} tại ${translateCountry(dest.Country)}. Lý tưởng vào ${translateSeason(dest['Best Season']).toLowerCase()}.`;

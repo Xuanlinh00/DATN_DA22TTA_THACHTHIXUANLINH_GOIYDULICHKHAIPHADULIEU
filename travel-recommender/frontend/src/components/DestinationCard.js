@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDestinationImage, getFallbackImage, getExactDestinationImage, resolveCategoryKey } from '../services/imageService';
+import { getDatasetImage, getDestinationImage, getFallbackImage, getExactDestinationImage, resolveCategoryKey } from '../services/imageService';
 import { translateCountry, translateCategory, translateSeason, stripDisplayName } from '../utils/translator';
 import './DestinationCard.css';
 
@@ -34,10 +34,11 @@ function DestinationCard({ destination, rank, selected = false, onMapPin, imageV
     : '';
 
   // Ưu tiên: 1) exact curated image → 2) IMAGES_BY_TYPE (name-keyword resolution) → 3) fallback
+  const datasetImg = getDatasetImage(destination);
   const exactImg = getExactDestinationImage(name, imageVariant);
   const imageUrl = imgError
     ? getFallbackImage(name, rawType, imageVariant)
-    : (exactImg || getDestinationImage(name, rawType, rawCountry, imageVariant));
+    : (datasetImg || exactImg || getDestinationImage(name, rawType, rawCountry, imageVariant));
 
   const handleCardClick = () => {
     navigate(`/destinations/${encodeURIComponent(name)}`);

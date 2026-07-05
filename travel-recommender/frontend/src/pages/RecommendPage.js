@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recommendationsApi } from '../services/api';
-import { getDestinationImage, getFallbackImage, resolveCategoryKey } from '../services/imageService';
+import { getDatasetImage, getDestinationImage, getFallbackImage, resolveCategoryKey } from '../services/imageService';
 import { useRecommendation } from '../contexts/RecommendationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { translateCountry, translateCategory, translateSeason, stripDisplayName } from '../utils/translator';
@@ -217,7 +217,7 @@ function DestResultCard({ dest, prefs, rank, onClick }) {
   const name = dest['Destination Name'] || '';
   const displayName = stripDisplayName(name);
   const country = translateCountry(dest.Country || '');
-  const imgUrl = getDestinationImage(name, dest.Type, dest.Country);
+  const imgUrl = getDatasetImage(dest) || getDestinationImage(name, dest.Type, dest.Country);
   const tagline = getDestTagline(dest, prefs);
   const rating = dest['Avg Rating'] || dest['avg_rating'];
   const cost = dest['Avg Cost (USD/day)'];

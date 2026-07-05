@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { filtersApi } from '../services/api';
-import { translateCountry } from '../utils/translator';
+import { translateCategory, translateCountry } from '../utils/translator';
 import './FilterPanel.css';
 
 function FilterPanel({ onFilterChange, inline = false }) {
@@ -149,7 +149,7 @@ function FilterPanel({ onFilterChange, inline = false }) {
                       }`}
                       onClick={() => toggleOption('category', category)}
                     >
-                      {category}
+                      {translateCategory(category)}
                     </span>
                   );
                 })}

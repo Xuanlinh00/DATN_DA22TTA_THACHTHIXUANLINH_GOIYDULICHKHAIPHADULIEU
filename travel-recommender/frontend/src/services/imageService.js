@@ -513,6 +513,13 @@ export const getDestinationImage = (name, type, country, variantOffset = 0) => {
 /**
  * Lấy hình ảnh fallback (dùng IMAGES_BY_TYPE) khi URL chính bị lỗi.
  */
+export const getDatasetImage = (destination) => {
+  const image = destination?.image || destination?.Image || destination?.['image'];
+  if (!image || typeof image !== 'string') return null;
+  const trimmed = image.trim();
+  return trimmed.startsWith('http') ? trimmed : null;
+};
+
 export const getFallbackImage = (name, type, variantOffset = 0) => {
   const categoryKey = resolveCategoryKey(type, name);
   const images = IMAGES_BY_TYPE[categoryKey] || IMAGES_BY_TYPE.default;

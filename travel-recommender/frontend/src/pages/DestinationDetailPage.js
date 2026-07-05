@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { destinationsApi, getOrCreateUserId } from '../services/api';
-import { getDestinationImage, getFallbackImage, getExactDestinationImage, resolveCategoryKey } from '../services/imageService';
+import { getDatasetImage, getDestinationImage, getFallbackImage, getExactDestinationImage, resolveCategoryKey } from '../services/imageService';
 import DestinationCard from '../components/DestinationCard';
 import ClimateChart from '../components/ClimateChart';
 import Footer from '../components/Footer';
@@ -121,7 +121,8 @@ function DestinationDetailPage() {
   }
 
   // Ưu tiên: 1) exact curated image → 2) IMAGES_BY_TYPE (name-keyword resolution) → 3) fallback
-  const imageUrl = getExactDestinationImage(destination['Destination Name'])
+  const imageUrl = getDatasetImage(destination)
+    || getExactDestinationImage(destination['Destination Name'])
     || getDestinationImage(destination['Destination Name'], destination.Type, destination.Country);
 
   // Resolve correct category from name keywords (CSV Type field is unreliable)

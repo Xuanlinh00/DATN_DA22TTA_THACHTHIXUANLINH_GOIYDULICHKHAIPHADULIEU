@@ -236,7 +236,7 @@ function HomePage() {
 
 
       {/* ══════════════════ HERO SECTION (Split Screen with offset) ══════════════════ */}
-      <section className="relative min-h-[75vh] pt-32 pb-8 px-container-padding flex flex-col md:flex-row items-center gap-asymmetric-gap-lg overflow-hidden">
+      <section className="relative min-h-[60vh] pt-20 pb-6 px-container-padding flex flex-col md:flex-row items-center gap-asymmetric-gap-lg overflow-hidden">
         {/* Background Decorative Orbs */}
         <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-primary/5 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute top-20 right-0 w-64 h-64 bg-secondary/10 rounded-full blur-[80px] pointer-events-none"></div>

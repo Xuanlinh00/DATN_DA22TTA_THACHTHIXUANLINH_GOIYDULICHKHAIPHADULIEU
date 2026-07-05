@@ -233,6 +233,46 @@ const AdminPage = () => {
     setPassword('');
   };
 
+
+  const anonymizeUserId = (userId) => {
+    const text = String(userId || 'anonymous');
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) {
+      hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    }
+    return `USER-${Math.abs(hash).toString(16).toUpperCase().padStart(6, '0').slice(0, 6)}`;
+  };
+
+  const toNumber = (value, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const getRuleItems = (rule) => {
+    const items = [
+      ...(Array.isArray(rule.antecedents) ? rule.antecedents : []),
+      ...(Array.isArray(rule.consequents) ? rule.consequents : [])
+    ].filter(Boolean);
+    if (items.length > 0) return items.map(item => String(item).trim()).filter(Boolean);
+
+    const braceMatches = String(rule.rule || '').match(/\{([^}]+)\}/g);
+    if (braceMatches) {
+      return braceMatches
+        .flatMap(match => match.slice(1, -1).split(','))
+        .map(item => item.trim())
+        .filter(Boolean);
+    }
+
+    return String(rule.rule || '').split(/=>|,|\|/).map(item => item.trim()).filter(Boolean);
+  };
+
+  const formatRuleLabel = (rule) => {
+    if (rule.rule) return rule.rule;
+    const left = Array.isArray(rule.antecedents) ? rule.antecedents.join(', ') : '';
+    const right = Array.isArray(rule.consequents) ? rule.consequents.join(', ') : '';
+    if (left || right) return `${left || '?'} => ${right || '?'}`;
+    return 'Unknown rule';
+  };
   // User Accounts
   const handleToggleLock = async (username) => {
     try {
@@ -243,19 +283,6 @@ const AdminPage = () => {
       }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Lỗi khi khóa/mở khóa tài khoản.');
-    }
-  };
-
-  const handleDeleteUser = async (username) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản người dùng ${username}?`)) return;
-    try {
-      const res = await adminApi.deleteUser(username);
-      if (res.data.success) {
-        toast.success(res.data.message);
-        fetchAllData();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Lỗi khi xóa tài khoản.');
     }
   };
 
@@ -273,93 +300,8 @@ const AdminPage = () => {
     }
   };
 
-  // Destination CRUD Actions
-  const handleOpenAddDest = () => {
-    setDestFormMode('add');
-    setSelectedDestName('');
-    setDestForm({
-      destination_name: '',
-      country: '',
-      continent: 'Asia',
-      type: 'Cultural',
-      best_season: 'Summer',
-      avg_cost: 100,
-      cost_category: 'Moderate',
-      description: '',
-      image: '',
-      latitude: '',
-      longitude: ''
-    });
-    setIsDestModalOpen(true);
-  };
-
-  const handleOpenEditDest = (d) => {
-    setDestFormMode('edit');
-    const name = d['Destination Name'] || d.name;
-    setSelectedDestName(name);
-    setDestForm({
-      destination_name: name,
-      country: d.Country || '',
-      continent: d.Continent || 'Asia',
-      type: d.Type || 'Cultural',
-      best_season: d['Best Season'] || d.Season || 'Summer',
-      avg_cost: d['Avg Cost (USD/day)'] || d.Cost || 100,
-      cost_category: d.Cost_Category || 'Moderate',
-      description: d.Description || '',
-      image: d.image || '',
-      latitude: d.destination_latitude || '',
-      longitude: d.destination_longitude || ''
-    });
-    setIsDestModalOpen(true);
-  };
-
-  const handleSaveDestination = async (e) => {
+  const handleSaveDestination = (e) => {
     e.preventDefault();
-    if (!destForm.destination_name || !destForm.country) {
-      toast.warning('Tên điểm đến và Quốc gia không được để trống.');
-      return;
-    }
-    
-    // Format coordinates
-    const payload = {
-      ...destForm,
-      avg_cost: parseFloat(destForm.avg_cost) || 0.0,
-      latitude: destForm.latitude !== '' ? parseFloat(destForm.latitude) : null,
-      longitude: destForm.longitude !== '' ? parseFloat(destForm.longitude) : null
-    };
-
-    try {
-      if (destFormMode === 'add') {
-        const res = await adminApi.addDestination(payload);
-        if (res.data.success) {
-          toast.success(res.data.message);
-          setIsDestModalOpen(false);
-          fetchAllData();
-        }
-      } else {
-        const res = await adminApi.updateDestination(selectedDestName, payload);
-        if (res.data.success) {
-          toast.success(res.data.message);
-          setIsDestModalOpen(false);
-          fetchAllData();
-        }
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Lỗi khi lưu điểm đến.');
-    }
-  };
-
-  const handleDeleteDestination = async (name) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa điểm đến '${name}'? Điều này sẽ xóa mọi tham chiếu liên quan.`)) return;
-    try {
-      const res = await adminApi.deleteDestination(name);
-      if (res.data.success) {
-        toast.success(res.data.message);
-        fetchAllData();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Lỗi khi xóa điểm đến.');
-    }
   };
 
   // Image Upload / Auto-Fetch
@@ -425,12 +367,12 @@ const AdminPage = () => {
 
   // Live Data Processing & Formatting for Recharts
   const scatterData = rules.map(r => ({
-    support: parseFloat((r.support * 100).toFixed(3)),
-    confidence: parseFloat((r.confidence * 100).toFixed(1)),
-    lift: parseFloat(r.lift?.toFixed(3) || 0),
-    rule: r.rule,
-    rec_score: parseFloat(r.recommendation_score?.toFixed(3) || 0)
-  }));
+    support: parseFloat((toNumber(r.support) * 100).toFixed(3)),
+    confidence: parseFloat((toNumber(r.confidence) * 100).toFixed(1)),
+    lift: parseFloat(toNumber(r.lift).toFixed(3)),
+    rule: formatRuleLabel(r),
+    rec_score: parseFloat(toNumber(r.recommendation_score, toNumber(r.confidence) * toNumber(r.lift)).toFixed(3))
+  })).filter(item => item.support > 0 && item.confidence > 0);
 
   const getLiftColor = (lift) => {
     if (lift > 3.0) return '#e11d48'; // deep rose
@@ -445,7 +387,7 @@ const AdminPage = () => {
     const data = bins.map((bin, i) => {
       if (i === bins.length - 1) return null;
       const nextBin = bins[i + 1];
-      const count = rules.filter(r => r.lift >= bin && r.lift < nextBin).length;
+      const count = rules.filter(r => toNumber(r.lift) >= bin && toNumber(r.lift) < nextBin).length;
       return {
         range: `${bin}-${nextBin}`,
         count
@@ -457,15 +399,9 @@ const AdminPage = () => {
   const topItems = (() => {
     const counts = {};
     rules.forEach(r => {
-      const match = r.rule?.match(/\{([^}]+)\}/g);
-      if (match) {
-        match.forEach(m => {
-          const items = m.slice(1, -1).split(',').map(x => x.trim());
-          items.forEach(item => {
-            counts[item] = (counts[item] || 0) + 1;
-          });
-        });
-      }
+      getRuleItems(r).forEach(item => {
+        counts[item] = (counts[item] || 0) + 1;
+      });
     });
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
@@ -554,7 +490,7 @@ const AdminPage = () => {
     }
     if (activeModal === 'rules') {
       return rules.filter(r =>
-        r.rule?.toLowerCase().includes(modalSearch.toLowerCase())
+        formatRuleLabel(r).toLowerCase().includes(modalSearch.toLowerCase())
       );
     }
     if (activeModal === 'users_ratings') {
@@ -568,7 +504,7 @@ const AdminPage = () => {
 
   // Rules Paginated
   const sortedAndFilteredRules = rules
-    .filter(r => r.rule?.toLowerCase().includes(rulesSearch.toLowerCase()))
+    .filter(r => formatRuleLabel(r).toLowerCase().includes(rulesSearch.toLowerCase()))
     .sort((a, b) => {
       let valA = a[rulesSortKey];
       let valB = b[rulesSortKey];
@@ -985,21 +921,22 @@ const AdminPage = () => {
                     </thead>
                     <tbody>
                       {paginatedRules.map((r, i) => {
-                        const recScore = r.recommendation_score || (r.confidence * r.lift);
-                        const parts = r.rule?.split(' => ');
+                        const recScore = toNumber(r.recommendation_score, toNumber(r.confidence) * toNumber(r.lift));
+                        const left = Array.isArray(r.antecedents) ? r.antecedents.join(', ') : formatRuleLabel(r).split(' => ')[0];
+                        const right = Array.isArray(r.consequents) ? r.consequents.join(', ') : formatRuleLabel(r).split(' => ')[1];
                         return (
                           <tr key={i}>
                             <td>{(rulesPage - 1) * rulesPerPage + i + 1}</td>
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                                <span style={{ padding: '3px 8px', background: 'rgba(124, 58, 237, 0.08)', borderRadius: '6px', fontFamily: 'monospace' }}>{parts?.[0]}</span>
+                                <span style={{ padding: '3px 8px', background: 'rgba(124, 58, 237, 0.08)', borderRadius: '6px', fontFamily: 'monospace' }}>{left}</span>
                                 <span style={{ color: 'var(--primary)' }}>➜</span>
-                                <span style={{ padding: '3px 8px', background: 'rgba(22, 163, 74, 0.08)', borderRadius: '6px', fontFamily: 'monospace' }}>{parts?.[1]}</span>
+                                <span style={{ padding: '3px 8px', background: 'rgba(22, 163, 74, 0.08)', borderRadius: '6px', fontFamily: 'monospace' }}>{right}</span>
                               </div>
                             </td>
-                            <td className="text-center font-bold">{(r.support * 100).toFixed(2)}%</td>
-                            <td className="text-center font-bold">{(r.confidence * 100).toFixed(1)}%</td>
-                            <td className="text-center text-rose-600 font-bold">{r.lift?.toFixed(2)}</td>
+                            <td className="text-center font-bold">{(toNumber(r.support) * 100).toFixed(2)}%</td>
+                            <td className="text-center font-bold">{(toNumber(r.confidence) * 100).toFixed(1)}%</td>
+                            <td className="text-center text-rose-600 font-bold">{toNumber(r.lift).toFixed(2)}</td>
                             <td className="text-center text-cyan-700 font-bold">{recScore.toFixed(3)}</td>
                           </tr>
                         );
@@ -1284,22 +1221,16 @@ const AdminPage = () => {
                         <th>Người Dùng</th>
                         <th>Điểm Đến Thụ Hưởng</th>
                         <th className="text-center">Số Sao</th>
-                        <th>Loại Phân Loại</th>
                         <th className="text-center">Hành Động</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ratings.slice(0, 150).map((r, i) => (
                         <tr key={i}>
-                          <td className="font-bold">{r.user_id}</td>
+                          <td className="font-bold"><code>{anonymizeUserId(r.user_id)}</code></td>
                           <td className="dest-name-cell">{r.destination_name}</td>
                           <td className="text-center text-yellow-600 font-bold" style={{ fontSize: '15px' }}>
                             {'⭐'.repeat(Math.round(r.rating))} <span style={{ fontSize: '12px', color: '#6b7280' }}>({r.rating})</span>
-                          </td>
-                          <td>
-                            <span className={`badge ${r.is_real ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800'}`}>
-                              {r.is_real ? 'Thật' : 'Giả lập / Mô phỏng'}
-                            </span>
                           </td>
                           <td className="text-center">
                             <button
@@ -1314,7 +1245,7 @@ const AdminPage = () => {
                       ))}
                       {ratings.length === 0 && (
                         <tr>
-                          <td colSpan="5" className="text-center" style={{ padding: '2rem' }}>Không có lượt đánh giá nào trong hệ thống.</td>
+                          <td colSpan="4" className="text-center" style={{ padding: '2rem' }}>Không có lượt đánh giá nào trong hệ thống.</td>
                         </tr>
                       )}
                     </tbody>
@@ -1329,7 +1260,7 @@ const AdminPage = () => {
             <div className="tab-pane-new">
               <div className="section-card-new glass-panel-new">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <h3 className="font-headline-md" style={{ margin: 0 }}>Quản Lý Dữ Liệu Địa Danh</h3>
+                  <h3 className="font-headline-md" style={{ margin: 0 }}>Danh sách địa danh từ dataset</h3>
                   <div style={{ display: 'flex', gap: '1rem' }}>
                     <input
                       type="text"
@@ -1339,9 +1270,6 @@ const AdminPage = () => {
                       className="admin-modal-search"
                       style={{ width: '280px', margin: 0 }}
                     />
-                    <button className="btn-primary-new" onClick={handleOpenAddDest} style={{ width: 'auto', padding: '0.625rem 1.5rem', whiteSpace: 'nowrap' }}>
-                      ➕ Thêm Điểm Đến
-                    </button>
                   </div>
                 </div>
 
@@ -1357,7 +1285,6 @@ const AdminPage = () => {
                         <th>Chi Phí Avg</th>
                         <th className="text-center">Rating</th>
                         <th className="text-center">Cluster</th>
-                        <th className="text-center">Hành Động</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1379,22 +1306,12 @@ const AdminPage = () => {
                             <td className="font-bold text-rose-600">${d['Avg Cost (USD/day)'] || d.Cost}/ngày</td>
                             <td className="text-center font-bold">⭐ {d['Average Rating'] || d.Rating || d['Avg Rating'] || '3.0'}</td>
                             <td className="text-center font-bold"><code>#{d.Cluster !== undefined ? d.Cluster : '0'}</code></td>
-                            <td className="text-center">
-                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                                <button className="btn-logout-new" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleOpenEditDest(d)}>
-                                  ✏️ Sửa
-                                </button>
-                                <button className="logout-btn" style={{ padding: '6px 12px', fontSize: '12px', borderColor: '#fca5a5', color: '#ef4444' }} onClick={() => handleDeleteDestination(name)}>
-                                  🗑️ Xóa
-                                </button>
-                              </div>
-                            </td>
                           </tr>
                         );
                       })}
                       {paginatedDests.length === 0 && (
                         <tr>
-                          <td colSpan="9" className="text-center" style={{ padding: '2rem' }}>Không tìm thấy điểm đến phù hợp.</td>
+                          <td colSpan="8" className="text-center" style={{ padding: '2rem' }}>Không tìm thấy điểm đến phù hợp.</td>
                         </tr>
                       )}
                     </tbody>
@@ -1460,13 +1377,6 @@ const AdminPage = () => {
                                 onClick={() => handleToggleLock(u.username)}
                               >
                                 {u.status === 'locked' ? '🔓 Mở khóa' : '🔒 Khóa'}
-                              </button>
-                              <button
-                                className="logout-btn"
-                                style={{ padding: '6px 12px', fontSize: '12px', borderColor: '#fca5a5', color: '#ef4444' }}
-                                onClick={() => handleDeleteUser(u.username)}
-                              >
-                                🗑️ Xóa
                               </button>
                             </div>
                           </td>
@@ -1561,10 +1471,10 @@ const AdminPage = () => {
                       {getFilteredModalData().map((r, index) => (
                         <tr key={index}>
                           <td>{index + 1}</td>
-                          <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{r.rule}</td>
-                          <td className="text-center">{(r.support * 100).toFixed(2)}%</td>
-                          <td className="text-center">{(r.confidence * 100).toFixed(1)}%</td>
-                          <td className="text-center">{r.lift?.toFixed(2)}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{formatRuleLabel(r)}</td>
+                          <td className="text-center">{(toNumber(r.support) * 100).toFixed(2)}%</td>
+                          <td className="text-center">{(toNumber(r.confidence) * 100).toFixed(1)}%</td>
+                          <td className="text-center">{toNumber(r.lift).toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>

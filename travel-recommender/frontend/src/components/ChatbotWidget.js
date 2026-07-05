@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { chatApi } from '../services/api';
-import { getDestinationImage, getFallbackImage, resolveCategoryKey } from '../services/imageService';
+import { getDatasetImage, getDestinationImage, getFallbackImage, resolveCategoryKey } from '../services/imageService';
 import { useRecommendation } from '../contexts/RecommendationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { translateCountry, translateCategory, stripDisplayName } from '../utils/translator';
@@ -770,7 +770,7 @@ function ChatbotWidget() {
                           >
                             <img 
                               className="w-12 h-12 object-cover rounded-lg shrink-0"
-                              src={getDestinationImage(dest['Destination Name'], dest.Type, dest.Country)}
+                              src={getDatasetImage(dest) || getDestinationImage(dest['Destination Name'], dest.Type, dest.Country)}
                               alt=""
                               onError={e => { e.target.src = getFallbackImage(dest['Destination Name'], dest.Type); }}
                             />
