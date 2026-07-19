@@ -839,6 +839,21 @@ def get_my_rating(destination_name: str, user_id: str = Query(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Admin: Reload destination data from MongoDB (clears cache)
+@router.post("/admin/reload-data")
+def admin_reload_data():
+    """Clear destination cache and reload data from MongoDB into engine."""
+    try:
+        from mining.mongodb_storage import db_storage
+        db_storage._cached_destinations = None
+        engine.load_data()
+        return {
+            "success": True,
+            "message": f"Reloaded {len(engine.destinations)} destinations from MongoDB."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Get destination by name
 @router.get("/destinations/{destination_name}")
 def get_destination_details(destination_name: str):

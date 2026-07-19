@@ -21,8 +21,8 @@ function DestinationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   // Star rating state
-  const [myRating, setMyRating] = useState(null);      // user's current rating (1-5 or null)
-  const [hoverRating, setHoverRating] = useState(0);   // star being hovered
+  const [myRating, setMyRating] = useState(null);
+  const [hoverRating, setHoverRating] = useState(0);
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const [ratingMessage, setRatingMessage] = useState(null);
 
@@ -39,13 +39,11 @@ function DestinationDetailPage() {
       setClimate(null);
       setClimateError(null);
 
-      // Load destination details
       const response = await destinationsApi.getByName(name);
       if (response.data.success) {
         setDestination(response.data.destination);
       }
 
-      // Load similar destinations
       try {
         const similarResponse = await destinationsApi.getSimilar(name);
         if (similarResponse.data.success) {
@@ -55,7 +53,6 @@ function DestinationDetailPage() {
         console.log('No similar destinations found');
       }
 
-      // Load weather info
       try {
         const weatherResponse = await destinationsApi.getWeather(name);
         if (weatherResponse.data.success) {
@@ -65,7 +62,6 @@ function DestinationDetailPage() {
         console.log('Weather data not available');
       }
 
-      // Load historical climate data (Open-Meteo)
       setClimateLoading(true);
       try {
         const climateResponse = await destinationsApi.getClimate(name);
@@ -79,7 +75,6 @@ function DestinationDetailPage() {
         setClimateLoading(false);
       }
 
-      // Load user's existing rating for this destination
       try {
         const userId = getOrCreateUserId();
         const ratingResp = await destinationsApi.getMyRating(name, userId);
@@ -87,7 +82,7 @@ function DestinationDetailPage() {
           setMyRating(ratingResp.data.rating);
         }
       } catch (err) {
-        // Not rated yet — silent fail is fine
+        // Not rated yet — silent fail
       }
 
     } catch (err) {
@@ -97,8 +92,6 @@ function DestinationDetailPage() {
       setLoading(false);
     }
   };
-
-
 
   if (loading) {
     return (
@@ -120,12 +113,10 @@ function DestinationDetailPage() {
     );
   }
 
-  // Ưu tiên: 1) exact curated image → 2) IMAGES_BY_TYPE (name-keyword resolution) → 3) fallback
   const imageUrl = getDatasetImage(destination)
     || getExactDestinationImage(destination['Destination Name'])
     || getDestinationImage(destination['Destination Name'], destination.Type, destination.Country);
 
-  // Resolve correct category from name keywords (CSV Type field is unreliable)
   const resolvedCategory = resolveCategoryKey(destination.Type, destination['Destination Name']);
 
   const destName = stripDisplayName(destination['Destination Name']);
@@ -142,28 +133,35 @@ function DestinationDetailPage() {
     ? `https://maps.google.com/maps?q=${destination.destination_latitude},${destination.destination_longitude}&hl=vi&z=12&output=embed`
     : `https://maps.google.com/maps?q=${encodeURIComponent(destination['Destination Name'] + ' ' + destination.Country)}&hl=vi&z=12&output=embed`;
 
+  const mapsLink = hasCoords
+    ? `https://www.google.com/maps?q=${destination.destination_latitude},${destination.destination_longitude}`
+    : `https://www.google.com/maps/search/${encodeURIComponent(destination['Destination Name'] + ' ' + destination.Country)}`;
+
+  // Parse timezone safely
+  const rawTz = destination.country_timezone;
+  const timezone = rawTz
+    ? (Array.isArray(rawTz) ? rawTz[0] : String(rawTz).split(',')[0].trim())
+    : null;
 
   return (
     <div className="min-h-screen text-left" style={{ backgroundColor: '#fff7fa' }}>
       <Helmet>
         <title>{destName} - NÂU</title>
         <meta name="description" content={descriptionText} />
-        {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:title" content={`${destName} | NÂU`} />
         <meta property="og:description" content={descriptionText} />
         <meta property="og:image" content={imageUrl} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
-        {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={`${destName} | NÂU`} />
         <meta name="twitter:description" content={descriptionText} />
         <meta name="twitter:image" content={imageUrl} />
       </Helmet>
-      
-      {/* Back Button Pill */}
-      <button 
+
+      {/* Back Button */}
+      <button
         className="fixed top-24 left-10 z-50 glass-panel px-5 py-2.5 rounded-full shadow-lg text-primary hover:bg-white/40 active:scale-95 transition-all flex items-center gap-2 font-label-caps text-[10px] uppercase font-bold"
         onClick={() => navigate(-1)}
       >
@@ -171,22 +169,21 @@ function DestinationDetailPage() {
         Quay Lại
       </button>
 
-      {/* Main Content: Split Screen Layout */}
+      {/* Main Content */}
       <main className="flex flex-col md:flex-row min-h-screen pt-32 pb-10 px-4 md:px-0 max-w-7xl mx-auto md:pl-[8%]">
-        
-        {/* Left Half: Image & Climate Chart */}
+
+        {/* Left: Image & Climate */}
         <section className="w-full md:w-1/2 flex flex-col gap-6">
           <div className="w-full h-[512px] md:h-[calc(100vh-160px)] relative overflow-hidden rounded-3xl shadow-2xl shrink-0">
-            <img 
-              alt={destName} 
-              className="w-full h-full object-cover" 
+            <img
+              alt={destName}
+              className="w-full h-full object-cover"
               src={imageUrl}
               onError={(e) => {
                 e.target.src = getFallbackImage(destination['Destination Name'], destination.Type);
               }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-            
             <div className="absolute bottom-10 left-10 text-white z-10 text-left">
               <h1 className="font-display-lg text-display-lg tracking-tight leading-none text-white">
                 {destName}
@@ -198,7 +195,7 @@ function DestinationDetailPage() {
             </div>
           </div>
 
-          {/* ── Climate Chart Widget moved here (dưới hình) ─────────────────────────── */}
+          {/* Climate Chart */}
           {(climateLoading || climate || climateError) && (
             <div className="glass-panel p-6 rounded-2xl shadow-sm text-left">
               <ClimateChart
@@ -212,10 +209,10 @@ function DestinationDetailPage() {
           )}
         </section>
 
-        {/* Content Section (Right Half) */}
+        {/* Right: Detail Cards */}
         <section className="w-full md:w-1/2 px-4 md:px-12 flex flex-col gap-8 pt-10 md:pt-0">
-          
-          {/* Description Glass Card */}
+
+          {/* Description */}
           <div className="glass-panel p-8 rounded-2xl shadow-[0_40px_80px_rgba(136,19,55,0.05)] transform md:-translate-x-12 relative z-20 text-left">
             <h2 className="font-display-lg text-headline-md text-primary mb-4">
               {destination['UNESCO Site'] === 'Yes'
@@ -229,9 +226,8 @@ function DestinationDetailPage() {
             </p>
           </div>
 
-          {/* Stats & Metadata (Weather & Country Info Cards) */}
+          {/* Weather & Currency */}
           <div className="flex flex-col sm:flex-row gap-4">
-            {/* Weather Card */}
             <div className="glass-panel flex-1 p-6 rounded-2xl flex items-center gap-4 shadow-sm border-r border-white/30 text-left">
               <div className="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-primary shrink-0">
                 <span className="material-symbols-outlined text-2xl">light_mode</span>
@@ -243,8 +239,6 @@ function DestinationDetailPage() {
                 </h3>
               </div>
             </div>
-
-            {/* Country Metadata Card */}
             <div className="glass-panel flex-1 p-6 rounded-2xl flex items-center gap-4 shadow-sm border-r border-white/30 text-left">
               <div className="w-12 h-12 rounded-full bg-tertiary-fixed-dim/30 flex items-center justify-center text-primary shrink-0">
                 <span className="material-symbols-outlined text-2xl">payments</span>
@@ -258,7 +252,7 @@ function DestinationDetailPage() {
             </div>
           </div>
 
-          {/* Grid Metadata details */}
+          {/* Type & Cost */}
           <div className="glass-panel p-6 rounded-2xl grid grid-cols-2 gap-4 text-left">
             <div>
               <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Loại hình</p>
@@ -276,27 +270,95 @@ function DestinationDetailPage() {
             )}
           </div>
 
-          <div className="glass-panel p-6 rounded-2xl shadow-sm text-left flex flex-col">
-            <p className="font-label-caps text-[9px] text-secondary font-bold uppercase tracking-wider mb-1">
-              Bản Đồ
-            </p>
-            <h3 className="text-sm font-bold text-on-surface mb-3">
-              Vị trí {destName}
-            </h3>
-            <div className="w-full h-64 rounded-xl overflow-hidden shadow-inner">
+          {/* ── Map Widget ─────────────────────────────────────────────── */}
+          <div className="glass-panel rounded-2xl shadow-sm text-left overflow-hidden">
+
+            {/* Map header row */}
+            <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="font-label-caps text-[9px] text-secondary font-bold uppercase tracking-wider mb-1">
+                  📍 Vị Trí Địa Lý
+                </p>
+                <h3 className="text-sm font-bold text-on-surface flex items-center gap-1.5 flex-wrap">
+                  {destName}
+                  {destination.country_flag && <span className="text-base">{destination.country_flag}</span>}
+                </h3>
+
+                {/* Geo chips */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {destination.country_region && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-pink-50 text-primary border border-pink-200 rounded-full px-2.5 py-0.5">
+                      <span className="material-symbols-outlined text-[11px]">public</span>
+                      {destination.country_region}
+                    </span>
+                  )}
+                  {destination.country_subregion && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-orange-50 text-orange-600 border border-orange-200 rounded-full px-2.5 py-0.5">
+                      <span className="material-symbols-outlined text-[11px]">map</span>
+                      {destination.country_subregion}
+                    </span>
+                  )}
+                  {timezone && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-violet-50 text-violet-600 border border-violet-200 rounded-full px-2.5 py-0.5">
+                      <span className="material-symbols-outlined text-[11px]">schedule</span>
+                      {timezone}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Open in Google Maps */}
+              <a
+                href={mapsLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold text-white bg-primary rounded-full px-3.5 py-2 shadow hover:opacity-90 active:scale-95 transition-all uppercase tracking-wider whitespace-nowrap"
+              >
+                <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                Mở Maps
+              </a>
+            </div>
+
+            {/* Embedded map */}
+            <div className="w-full h-64">
               <iframe
-                title="map"
+                title={`Bản đồ ${destName}`}
                 width="100%"
                 height="100%"
-                style={{ border: 0 }}
+                style={{ border: 0, display: 'block' }}
                 loading="lazy"
                 allowFullScreen
                 src={mapUrl}
-              ></iframe>
+              />
+            </div>
+
+            {/* Coordinates + Capital footer */}
+            <div className="px-5 py-3 bg-pink-50/70 border-t border-pink-100 flex flex-wrap items-center gap-x-5 gap-y-1">
+              {hasCoords ? (
+                <span className="flex items-center gap-1.5 text-[11px] font-mono text-secondary">
+                  <span className="material-symbols-outlined text-[13px] text-primary">my_location</span>
+                  <span className="font-semibold text-on-surface">{Number(destination.destination_latitude).toFixed(4)}°</span>
+                  <span>vĩ độ</span>
+                  <span className="text-pink-300 mx-0.5">·</span>
+                  <span className="font-semibold text-on-surface">{Number(destination.destination_longitude).toFixed(4)}°</span>
+                  <span>kinh độ</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[11px] text-secondary italic">
+                  <span className="material-symbols-outlined text-[13px]">location_searching</span>
+                  Tìm kiếm theo tên địa danh
+                </span>
+              )}
+              {destination.country_capital && (
+                <span className="flex items-center gap-1 text-[11px] text-secondary">
+                  <span className="material-symbols-outlined text-[13px] text-primary">location_city</span>
+                  Thủ đô: <span className="font-semibold text-on-surface ml-1">{destination.country_capital}</span>
+                </span>
+              )}
             </div>
           </div>
 
-          {/* ── Star Rating Widget ───────────────────────────── */}
+          {/* ── Star Rating Widget ─────────────────────────────────── */}
           <div className="glass-panel p-6 rounded-2xl shadow-sm text-left">
             <p className="font-label-caps text-[9px] text-secondary font-bold uppercase tracking-wider mb-1">
               Đánh Giá Của Bạn
@@ -304,7 +366,6 @@ function DestinationDetailPage() {
             <h3 className="text-sm font-bold text-on-surface mb-3">
               {myRating ? `Bạn đã đánh giá ${myRating} ⭐` : 'Hãy cho chúng tôi biết trải nghiệm của bạn!'}
             </h3>
-            {/* 5 stars */}
             <div className="flex gap-1 mb-3">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -341,9 +402,7 @@ function DestinationDetailPage() {
               ))}
             </div>
             {ratingMessage && (
-              <p className={`text-xs font-semibold mt-1 ${
-                ratingMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-500'
-              }`}>
+              <p className={`text-xs font-semibold mt-1 ${ratingMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}>
                 {ratingMessage.text}
               </p>
             )}
@@ -352,9 +411,9 @@ function DestinationDetailPage() {
             </p>
           </div>
 
-          {/* Action CTA */}
+          {/* CTA */}
           <div className="mt-4 flex justify-end">
-            <button 
+            <button
               onClick={() => navigate('/recommend')}
               className="bg-primary text-white px-8 py-4 rounded-full font-label-caps text-[11px] font-bold tracking-widest hover:opacity-90 transition-all shadow-lg shadow-primary/25 active:scale-95 uppercase"
             >
@@ -365,7 +424,7 @@ function DestinationDetailPage() {
         </section>
       </main>
 
-      {/* Similar Destinations Section */}
+      {/* Similar Destinations */}
       {similarDestinations.length > 0 && (
         <section className="py-20 px-6 max-w-7xl mx-auto md:pl-[8%] border-t border-pink-100 mt-20 text-left">
           <h2 className="font-display-lg text-headline-lg text-primary mb-10">Điểm Đến Tương Tự</h2>
@@ -378,7 +437,6 @@ function DestinationDetailPage() {
       )}
 
       <Footer />
-
     </div>
   );
 }

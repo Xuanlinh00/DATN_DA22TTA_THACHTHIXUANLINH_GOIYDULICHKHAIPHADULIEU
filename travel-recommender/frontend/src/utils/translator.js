@@ -315,8 +315,17 @@ const DESC_CATEGORY_FIX = {
   'safari': 'safari', 'resort': 'nghỉ dưỡng', 'heritage': 'di sản',
 };
 
+// Map English season words to Vietnamese (for fixing CSV descriptions)
+const DESC_SEASON_FIX = {
+  'spring': 'mùa xuân',
+  'summer': 'mùa hè',
+  'autumn': 'mùa thu',
+  'fall': 'mùa thu',
+  'winter': 'mùa đông',
+};
+
 /**
- * Fix CSV description: strip country from name, replace English category keywords with Vietnamese.
+ * Fix CSV description: strip country from name, replace English category/season keywords with Vietnamese.
  */
 export const fixDescription = (desc, fullName) => {
   if (!desc) return '';
@@ -330,6 +339,10 @@ export const fixDescription = (desc, fullName) => {
   }
   // Replace English category keywords with Vietnamese equivalents
   for (const [eng, vie] of Object.entries(DESC_CATEGORY_FIX)) {
+    d = d.replace(new RegExp(`\\b${eng}\\b`, 'gi'), vie);
+  }
+  // Replace English season words with Vietnamese equivalents
+  for (const [eng, vie] of Object.entries(DESC_SEASON_FIX)) {
     d = d.replace(new RegExp(`\\b${eng}\\b`, 'gi'), vie);
   }
   return d;

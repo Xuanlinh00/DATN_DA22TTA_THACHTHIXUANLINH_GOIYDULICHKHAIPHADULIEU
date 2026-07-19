@@ -557,7 +557,7 @@ const AdminPage = () => {
               <div className="input-group">
                 <input
                   type="password"
-                  placeholder="Nhập mật khẩu (admin / admin123)"
+                  placeholder="Nhập mật khẩu"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

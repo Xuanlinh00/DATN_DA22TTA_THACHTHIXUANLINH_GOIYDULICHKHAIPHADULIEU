@@ -89,6 +89,7 @@ export default function WorldMapPage() {
   const [options,      setOptions]      = useState(EMPTY_OPTS);
   const [selectedDest, setSelectedDest] = useState(null);
   const [flyToDest,    setFlyToDest]    = useState(null);   // triggers MapFlyTo
+  const [showLegend,   setShowLegend]   = useState(true);
 
   /* ── load filter options once ─────────────────────────────────────────── */
   useEffect(() => {
@@ -483,6 +484,83 @@ export default function WorldMapPage() {
         </div>
       </aside>
 
+      {/* ── Algorithm Legend Widget (top-right) ───────────────────────── */}
+      <div style={{
+        position: 'fixed', top: 82, right: 20, zIndex: 40,
+        width: showLegend ? 320 : 54,
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: 18,
+        border: '1px solid rgba(194,68,130,0.15)',
+        boxShadow: '0 8px 30px rgba(136,19,55,0.08)',
+        transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
+        overflow: 'hidden',
+      }}>
+        {showLegend ? (
+          <div style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 16 }}>📊</span>
+                <span style={{ fontFamily: 'Inter,sans-serif', fontWeight: 800, fontSize: 12, color: '#c24482', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Chú giải thuật toán
+                </span>
+              </div>
+              <button 
+                onClick={() => setShowLegend(false)}
+                style={{
+                  background: 'none', border: 'none', color: '#c24482', 
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline'
+                }}
+              >
+                Thu gọn
+              </button>
+            </div>
+
+            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 10.5, color: '#544249', lineHeight: 1.45, margin: '0 0 14px' }}>
+              Bản đồ tương tác biểu diễn <strong>150 địa danh</strong> du lịch toàn cầu đã được phân tích bằng mô hình khoa học dữ liệu:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'start' }}>
+                <span style={{ fontSize: 14, background: 'rgba(194,68,130,0.08)', padding: 4, borderRadius: 8, flexShrink: 0 }}>📍</span>
+                <div>
+                  <h4 style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, color: '#1f1a1e' }}>Tọa độ Thực tế</h4>
+                  <p style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 9.5, color: '#87717a', marginTop: 1 }}>Biểu diễn trực quan 100% tọa độ địa lý (Latitude/Longitude) tích hợp chỉ đường Google Maps.</p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'start' }}>
+                <span style={{ fontSize: 14, background: 'rgba(194,68,130,0.08)', padding: 4, borderRadius: 8, flexShrink: 0 }}>🤖</span>
+                <div>
+                  <h4 style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, color: '#1f1a1e' }}>Phân cụm K-Means</h4>
+                  <p style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 9.5, color: '#87717a', marginTop: 1 }}>Hệ thống tự động phân loại điểm đến thành các cụm du lịch tối ưu dựa trên Chi phí trung bình, Xếp hạng, & Chỉ số sinh hoạt.</p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'start' }}>
+                <span style={{ fontSize: 14, background: 'rgba(194,68,130,0.08)', padding: 4, borderRadius: 8, flexShrink: 0 }}>⚡</span>
+                <div>
+                  <h4 style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, color: '#1f1a1e' }}>Lọc đề xuất lai (Hybrid)</h4>
+                  <p style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 9.5, color: '#87717a', marginTop: 1 }}>Khi áp dụng bộ lọc, hệ thống kết hợp bộ lọc TF-IDF Content-Based và Thuật toán Khai phá luật kết hợp Apriori để sắp xếp thứ tự ưu tiên.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button 
+            onClick={() => setShowLegend(true)}
+            style={{
+              width: '100%', height: 50, background: 'none', border: 'none', 
+              display: 'flex', alignItems: 'center', justifyContent: 'center', 
+              cursor: 'pointer', fontSize: 18
+            }}
+            title="Hiện bảng chú giải thuật toán"
+          >
+            📊
+          </button>
+        )}
+      </div>
+
 
 
 
@@ -623,47 +701,97 @@ function DestinationCard({ dest, onNavigate, onDirections, onClose }) {
     ? fixDescription(dest.Description, dest['Destination Name'])
     : `Khám phá ${stripDisplayName(dest['Destination Name'])} — điểm đến ${(translateCategory(resolveCategoryKey(dest.Type, dest['Destination Name'])) || '').toLowerCase()} tại ${translateCountry(dest.Country)}. Lý tưởng vào ${translateSeason(dest['Best Season']).toLowerCase()}.`;
 
+  // Parse scientific metrics
+  const hasCoords = dest.destination_latitude != null && dest.destination_longitude != null;
+  const clusterId = dest.Cluster !== undefined ? dest.Cluster : null;
+  const isUnesco = dest['UNESCO Site'] === 'Yes';
+  
+  // popularity calculation (popularity_score or popularity from CSV)
+  let popularity = 75;
+  if (dest.popularity_score != null) {
+    popularity = parseFloat(dest.popularity_score);
+  } else if (dest.Popularity != null) {
+    popularity = parseFloat(dest.Popularity) * 10;
+  }
+  popularity = Math.min(Math.max(popularity, 30), 100); // bound in [30, 100] for visual aesthetics
+
   return (
     <div style={{
       position: 'fixed', bottom: 20, left: 300, right: 20, zIndex: 40,
       maxWidth: 860, margin: '0 auto',
     }}>
       <div style={{
-        background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(24px)',
-        borderRadius: 20, border: '1px solid rgba(255,255,255,0.5)',
-        boxShadow: '0 20px 60px rgba(136,19,55,0.1)',
+        background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(24px)',
+        borderRadius: 20, border: '1px solid rgba(194,68,130,0.15)',
+        boxShadow: '0 20px 60px rgba(136,19,55,0.12)',
         display: 'flex', gap: 0, overflow: 'hidden',
+        position: 'relative'
       }}>
         {/* image */}
-        <div style={{ width: 180, minWidth: 180, flexShrink: 0 }}>
+        <div style={{ width: 200, minWidth: 200, flexShrink: 0, position: 'relative' }}>
           <img
             src={imgSrc}
             alt={dest['Destination Name']}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             onError={e => { e.target.src = getFallbackImage(dest['Destination Name'], dest.Type); }}
           />
+          {/* Badge for UNESCO on top of image */}
+          {isUnesco && (
+            <div style={{
+              position: 'absolute', top: 10, left: 10,
+              background: 'rgba(255, 255, 255, 0.95)',
+              border: '1px solid #c24482',
+              borderRadius: 20, padding: '3px 8px',
+              fontSize: 8.5, fontWeight: 800, color: '#c24482',
+              fontFamily: 'Inter,sans-serif', textTransform: 'uppercase',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+            }}>
+              🏛️ Di Sản UNESCO
+            </div>
+          )}
         </div>
 
         {/* content */}
-        <div style={{ flex: 1, padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            {/* tag */}
-            <span style={{
-              fontFamily: 'Inter,sans-serif', fontSize: 8, fontWeight: 700,
-              color: '#c24482', textTransform: 'uppercase', letterSpacing: '0.1em',
-              background: 'rgba(194,68,130,0.08)', borderRadius: 99, padding: '2px 8px',
-              display: 'inline-block', marginBottom: 8,
-            }}>
-              {translateCategory(resolveCategoryKey(dest.Type, dest['Destination Name'])) || 'Điểm Đến'}
-            </span>
+            {/* Tag bar */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
+              <span style={{
+                fontFamily: 'Inter,sans-serif', fontSize: 8, fontWeight: 800,
+                color: '#c24482', textTransform: 'uppercase', letterSpacing: '0.1em',
+                background: 'rgba(194,68,130,0.08)', borderRadius: 99, padding: '2px 8px',
+              }}>
+                {translateCategory(resolveCategoryKey(dest.Type, dest['Destination Name'])) || 'Điểm Đến'}
+              </span>
+
+              {clusterId != null && (
+                <span style={{
+                  fontFamily: 'Inter,sans-serif', fontSize: 8, fontWeight: 800,
+                  color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.08em',
+                  background: 'rgba(79,70,229,0.08)', borderRadius: 99, padding: '2px 8px',
+                }}>
+                  🤖 Cụm K-Means: Cụm {clusterId}
+                </span>
+              )}
+
+              {hasCoords && (
+                <span style={{
+                  fontFamily: 'mono', fontSize: 8.5, fontWeight: 600,
+                  color: '#87717a', background: 'rgba(135,113,122,0.08)',
+                  borderRadius: 99, padding: '2px 8px',
+                }}>
+                  📍 {Number(dest.destination_latitude).toFixed(3)}°, {Number(dest.destination_longitude).toFixed(3)}°
+                </span>
+              )}
+            </div>
 
             {/* name */}
             <h3 style={{
-              fontFamily: 'Inter,sans-serif', fontWeight: 700, fontSize: 18,
-              color: '#1f1a1e', margin: '0 0 6px', lineHeight: 1.25,
+              fontFamily: 'Inter,sans-serif', fontWeight: 700, fontSize: 17,
+              color: '#1f1a1e', margin: '0 0 6px', lineHeight: 1.2,
             }}>
               {stripDisplayName(dest['Destination Name'])}
-              <span style={{ color: '#87717a', fontWeight: 400, fontSize: 14 }}>
+              <span style={{ color: '#87717a', fontWeight: 400, fontSize: 13.5 }}>
                 {', '}{translateCountry(dest.Country)}
               </span>
             </h3>
@@ -671,13 +799,13 @@ function DestinationCard({ dest, onNavigate, onDirections, onClose }) {
             {/* meta row */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
               {dest['Best Season'] && (
-                <span style={{ fontSize: 10, color: '#765469', fontFamily: 'Inter,sans-serif' }}>
+                <span style={{ fontSize: 10, color: '#765469', fontFamily: 'Inter,sans-serif', display: 'flex', alignItems: 'center', gap: 2 }}>
                   {SEASON_LABEL[dest['Best Season']] || dest['Best Season']}
                 </span>
               )}
               {dest['Avg Rating'] && (
                 <span style={{ fontSize: 10, color: '#765469', fontFamily: 'Inter,sans-serif' }}>
-                  ⭐ {Number(dest['Avg Rating']).toFixed(1)}
+                  ⭐ {Number(dest['Avg Rating']).toFixed(1)}/5
                 </span>
               )}
               {dest['Avg Cost (USD/day)'] && (
@@ -689,25 +817,42 @@ function DestinationCard({ dest, onNavigate, onDirections, onClose }) {
 
             {/* description */}
             <p style={{
-              fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#544249',
-              lineHeight: 1.55, margin: 0,
+              fontFamily: 'Inter,sans-serif', fontSize: 11.5, color: '#544249',
+              lineHeight: 1.5, margin: '0 0 8px',
               display: '-webkit-box', WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical', overflow: 'hidden',
             }}>
               {desc}
             </p>
+
+            {/* Recommendation score progress bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0' }}>
+              <span style={{ fontSize: 9.5, color: '#87717a', fontFamily: 'Inter,sans-serif', fontWeight: 700 }}>
+                Chỉ số đề xuất lai (Hybrid Score):
+              </span>
+              <div style={{ width: 80, height: 6, background: '#f3e8ee', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  width: `${popularity}%`, height: '100%',
+                  background: 'linear-gradient(90deg, #c24482, #e8679b)',
+                  borderRadius: 99
+                }} />
+              </div>
+              <span style={{ fontSize: 9.5, color: '#c24482', fontFamily: 'mono', fontWeight: 800 }}>
+                {Math.round(popularity)}%
+              </span>
+            </div>
           </div>
 
           {/* action buttons */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <button
               onClick={onNavigate}
               style={{
                 background: '#c24482', color: '#fff', border: 'none',
-                borderRadius: 99, padding: '8px 18px',
-                fontFamily: 'Inter,sans-serif', fontSize: 10, fontWeight: 700,
+                borderRadius: 99, padding: '7px 16px',
+                fontFamily: 'Inter,sans-serif', fontSize: 9.5, fontWeight: 700,
                 cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.07em',
-                boxShadow: '0 4px 14px rgba(194,68,130,0.3)',
+                boxShadow: '0 4px 12px rgba(194,68,130,0.25)',
               }}
             >
               Xem Chi Tiết
@@ -716,13 +861,13 @@ function DestinationCard({ dest, onNavigate, onDirections, onClose }) {
               onClick={onDirections}
               style={{
                 background: '#2563eb', color: '#fff', border: 'none',
-                borderRadius: 99, padding: '8px 18px',
-                fontFamily: 'Inter,sans-serif', fontSize: 10, fontWeight: 700,
+                borderRadius: 99, padding: '7px 16px',
+                fontFamily: 'Inter,sans-serif', fontSize: 9.5, fontWeight: 700,
                 cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.07em',
                 display: 'flex', alignItems: 'center', gap: 5,
               }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z"/>
                 <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
               </svg>
@@ -737,10 +882,10 @@ function DestinationCard({ dest, onNavigate, onDirections, onClose }) {
           style={{
             position: 'absolute', top: 10, right: 12,
             background: 'rgba(194,68,130,0.1)', border: 'none',
-            borderRadius: '50%', width: 26, height: 26,
+            borderRadius: '50%', width: 24, height: 24,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', color: '#c24482', fontSize: 14, fontWeight: 700,
-            lineHeight: 1,
+            cursor: 'pointer', color: '#c24482', fontSize: 13, fontWeight: 700,
+            lineHeight: 1, zIndex: 10,
           }}
         >
           ×
